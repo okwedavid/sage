@@ -45,6 +45,10 @@ class IntentSchema:
     entities: dict[str, Any] = field(default_factory=dict)
     constraints: dict[str, Any] = field(default_factory=dict)  # e.g., {"max_length": 500, "language": "French"}
     context: str = ""           # Additional background info
+
+    # NEW: Binary attachments (images, audio files)
+    # Keys: "image_base64", "image_type", "audio_bytes"
+    attachments: dict[str, Any] = field(default_factory=dict)
     
     # ============================================
     # SECTION 4: EXECUTION PARAMETERS
@@ -132,6 +136,7 @@ class IntentSchema:
             "entities": self.entities,
             "constraints": self.constraints,
             "context": self.context,
+            "has_attachments": bool(self.attachments),
             "priority": self.priority.name,
             "output_format": self.output_format.name,
             "suggested_agent": self.suggested_agent,

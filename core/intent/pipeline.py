@@ -8,36 +8,37 @@ from .enums import Status
 
 class IntentPipeline:
     """
-    OWNS: The full lifecycle of an Intent from raw text to routed execution.
+    OWNS: The full lifecycle of an Intent from raw text to executed result.
     EXPOSES: process() — the single entry point for the entire system.
     FORBIDDEN: Must never contain business logic. It only orchestrates.
-    
-    Flow:
-        Raw Text → Normalize → Classify → Validate → Route → Execute → Result
     """
     
     def __init__(self, api_key: str, registry):
-        """
-        Boot up all subsystems.
-        Each subsystem is independent and testable on its own.
-        """
         self.normalizer = IntentNormalizer()
         self.classifier = IntentClassifier(api_key=api_key)
         self.validator  = IntentValidator()
         self.router     = IntentRouter(registry=registry)
-        
         print("✅ [Pipeline] All subsystems initialized.")
     
-    def process(self, raw_input: str) -> dict:
+    def process(self, raw_input: str, attachments: dict = None) -> dict:
         """
         The ONE function that runs the entire SAGE engine.
         
+        Parameters:
+            raw_input: The user's text input
+            attachments: Optional dict containing:
+                - image_base64: base64 encoded image string
+                - image_type: "jpeg", "png", etc.
+                
         Returns a dictionary with:
             - intent: The full IntentSchema object
             - response: The agent's output text
             - agent: Which agent handled it
             - success: True/False
         """
+        
+        if attachments is None:
+            attachments = {}
         
         result = {
             "intent": None,
@@ -61,13 +62,18 @@ class IntentPipeline:
             intent = self.classifier.classify(clean_text)
             print(f"   Result: {intent.task_type.name} ({intent.confidence_score:.0%})")
             
+            # --- INJECT ATTACHMENTS ---
+            # After classification, attach any binary data the user provided
+            if attachments:
+                intent.attachments = attachments
+                print(f"   📎 Attachments: {list(attachments.keys())}")
+            
             # ==============================
             # STAGE 3: VALIDATE
             # ==============================
             print("🔍 [Stage 3/5] Validating classification...")
             intent = self.validator.validate(intent)
             
-            # If validation failed, stop here
             if intent.status == Status.FAILED:
                 result["intent"] = intent
                 result["response"] = f"Intent rejected: {intent.context}"
@@ -87,10 +93,8 @@ class IntentPipeline:
             
             response_text = worker.execute(intent)
             
-            # Mark as complete
             intent.advance_status(Status.COMPLETED)
             
-            # Package the result
             result["intent"] = intent
             result["response"] = response_text
             result["agent"] = agent_name

@@ -4,72 +4,54 @@ import getpass
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Import the Pipeline and Registry
 from core.intent.pipeline import IntentPipeline
 from agents.registry import AgentRegistry
 from agents.general_worker import GeneralWorker
+from agents.web_worker import WebWorker
+from agents.vision_worker import VisionWorker
 
 
 def boot_system(api_key: str) -> IntentPipeline:
-    """
-    Initializes all components and returns a ready-to-use Pipeline.
-    This is the 'Power On' sequence for SAGE.
-    """
-    print("\n🔧 SAGE Boot Sequence")
+    print("\n🔧 SAGE Boot Sequence v5.0")
     print("-" * 40)
-    
-    # 1. Create the Phone Book
     registry = AgentRegistry()
     
-    # 2. Create Workers and Register them
     print("   Loading Workers...")
-    general = GeneralWorker(api_key=api_key)
-    registry.register_worker("GeneralWorker", general)
+    registry.register_worker("GeneralWorker", GeneralWorker(api_key=api_key))
+    registry.register_worker("WebWorker", WebWorker(api_key=api_key))
+    registry.register_worker("VisionWorker", VisionWorker(api_key=api_key))
     
-    # Future: Uncomment when you build these agents
-    # image_worker = ImageWorker(api_key=stability_key)
-    # registry.register_worker("ImageWorker", image_worker)
-    
-    # 3. Build the Pipeline with all components
     print("   Assembling Pipeline...")
     pipeline = IntentPipeline(api_key=api_key, registry=registry)
-    
     print("-" * 40)
     print("🟢 SAGE is ONLINE.\n")
-    
     return pipeline
 
 
 def main():
     print("=" * 60)
-    print("    SYSTEMIC AGENTIC GENERAL ENGINE (SAGE) v3.0")
-    print("    Sprint 3: Full Pipeline Architecture")
+    print("    SYSTEMIC AGENTIC GENERAL ENGINE (SAGE) v5.0")
+    print("    Sprint 5: Multimodal Intelligence")
     print("=" * 60)
     
-    # Authentication
     api_key = getpass.getpass("🔑 Enter Groq API Key: ")
     if not api_key:
         print("❌ No key provided.")
         return
     
-    # Boot
     pipeline = boot_system(api_key)
     
-    # Interactive Loop
     while True:
         user_input = input("⌨️  YOU > ")
         
         if user_input.lower() in ('exit', 'quit', 'q'):
             print("👋 Shutting down SAGE.")
             break
-        
         if not user_input.strip():
             continue
         
-        # ONE CALL does everything now
         result = pipeline.process(user_input)
         
-        # Display
         print("\n" + "=" * 50)
         if result["success"]:
             intent = result["intent"]
