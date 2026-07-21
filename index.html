@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>SAGE — Systemic Agentic General Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script>tailwind.config={theme:{extend:{fontFamily:{sans:['Inter'],mono:['JetBrains Mono'],display:['Space Grotesk']}}}}</script>
+<style>
+* { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+html { height:100%; overflow:hidden; }
+body { height:100%; overflow:hidden; background:#0a0a0f; color:#e4e4e7; display:flex; flex-direction:column; }
+::-webkit-scrollbar { width:4px; height:4px; }
+::-webkit-scrollbar-thumb { background:#2a2d45; border-radius:10px; }
+::-webkit-scrollbar-thumb:hover { background:#667eea; }
+/* Independent panes */
+.scroll-pane { overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; scrollbar-width:thin; scrollbar-color:#2a2d45 transparent; contain:layout style paint; will-change:scroll-position; }
+.scroll-pane { content-visibility:auto; contain-intrinsic-size:auto 500px; }
+/* Glass */
+.glass { background:rgba(15,15,23,0.8); backdrop-filter:blur(20px) saturate(1.2); }
+.glass-card { background:linear-gradient(180deg,rgba(28,30,46,0.9),rgba(21,21,31,0.85)); backdrop-filter:blur(16px); border:1px solid #1e2130; }
+.gradient-text { background:linear-gradient(135deg,#a78bfa,#f093fb); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.hover-lift { transition:transform .22s cubic-bezier(.2,0,0,1),box-shadow .22s,border-color .22s; }
+.hover-lift:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,.3); }
+</style>
+</head>
+<body class="bg-[#0a0a0f] selection:bg-[#667eea]/30">
+<!-- BG glows -->
+<div class="pointer-events-none fixed inset-0">
+  <div class="absolute -top-[30%] -left-[10%] w-[60%] h-[70%] bg-[#667eea]/[0.13] rounded-full blur-[120px]"></div>
+  <div class="absolute -bottom-[20%] -right-[10%] w-[50%] h-[60%] bg-[#764ba2]/[0.10] rounded-full blur-[100px]"></div>
+</div>
+
+<div class="relative flex flex-col h-full p-2 lg:p-2.5">
+  <div class="flex flex-col flex-1 rounded-[16px] overflow-hidden border border-[#1e2130]/80 shadow-[0_0_0_1px_rgba(102,126,234,0.08),0_20px_80px_-20px_rgba(102,126,234,0.3)] bg-[#0a0a0f]">
+    
+    <!-- Header fixed -->
+    <header class="h-[56px] glass border-b border-[#1e2130] flex items-center justify-between px-5 shrink-0 z-30">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-[10px] bg-gradient-to-br from-[#667eea] to-[#f093fb] flex items-center justify-center shadow-[0_4px_12px_rgba(102,126,234,0.3)]"><i data-lucide="brain-circuit" class="w-5 h-5 text-white"></i></div>
+        <span class="font-display font-bold text-[20px] tracking-[-0.02em] gradient-text">SAGE</span>
+        <span class="hidden md:block text-[11px] text-[#71717a] ml-2">Systemic Agentic General Engine</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="hidden sm:flex items-center gap-2 h-7 px-3 rounded-full bg-[#1c1e2e] border border-[#1e2130] text-[11px] text-[#a1a1aa]"><span class="w-2 h-2 bg-[#3fb950] rounded-full shadow-[0_0_8px_#3fb950] animate-pulse"></span>Engine Online • llama-3.3-70b-versatile</div>
+        <button class="w-8 h-8 rounded-full bg-[#1c1e2e] border border-[#1e2130] grid place-items-center text-[#71717a] hover:text-white"><i data-lucide="bell" class="w-4 h-4"></i></button>
+        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-[#667eea] to-[#f093fb] grid place-items-center text-white font-bold text-[13px]">g</div>
+      </div>
+    </header>
+
+    <!-- 3-pane body -->
+    <div class="flex flex-1 overflow-hidden">
+      <!-- LEFT: independent scroll -->
+      <aside class="w-[280px] hidden lg:flex flex-col glass border-r border-[#1e2130] shrink-0">
+        <div class="scroll-pane flex-1 p-3 space-y-4">
+          <button class="w-full h-11 rounded-xl bg-gradient-to-br from-[#667eea] to-[#764ba2] text-white font-semibold text-[13px] flex items-center justify-between px-4 shadow-[0_4px_16px_rgba(102,126,234,0.3)] hover:-translate-y-0.5 transition-transform"><span class="flex items-center gap-2"><i data-lucide="sparkles" class="w-4 h-4"></i>New Conversation</span><i data-lucide="plus" class="w-4 h-4"></i></button>
+          
+          <nav class="space-y-1">
+            <a class="flex items-center gap-3 px-3 h-9 rounded-[10px] text-[13px] text-[#a1a1aa] hover:bg-[#1c1e2e] hover:text-white transition-colors" href="#"><i data-lucide="layout-dashboard" class="w-[18px] h-[18px]"></i>Dashboard</a>
+            <a class="flex items-center gap-3 px-3 h-9 rounded-[10px] bg-[rgba(102,126,234,0.14)] border border-[rgba(102,126,234,0.2)] text-white text-[13px]" href="#"><i data-lucide="message-square" class="w-[18px] h-[18px] text-[#667eea]"></i>Conversations<span class="ml-auto w-1.5 h-1.5 bg-[#667eea] rounded-full shadow-[0_0_8px_#667eea]"></span></a>
+            <a class="flex items-center gap-3 px-3 h-9 rounded-[10px] text-[13px] text-[#a1a1aa] hover:bg-[#1c1e2e] hover:text-white transition-colors" href="#"><i data-lucide="bot" class="w-[18px] h-[18px]"></i>Agents</a>
+            <a class="flex items-center gap-3 px-3 h-9 rounded-[10px] text-[13px] text-[#a1a1aa] hover:bg-[#1c1e2e] hover:text-white transition-colors" href="#"><i data-lucide="brain" class="w-[18px] h-[18px]"></i>Memory</a>
+            <a class="flex items-center gap-3 px-3 h-9 rounded-[10px] text-[13px] text-[#a1a1aa] hover:bg-[#1c1e2e] hover:text-white transition-colors" href="#"><i data-lucide="wrench" class="w-[18px] h-[18px]"></i>Tools</a>
+          </nav>
+
+          <div>
+            <div class="flex items-center gap-2 px-1 mb-2"><span class="text-[10px] font-bold tracking-[0.12em] text-[#71717a] uppercase">Conversations</span><div class="flex-1 h-px bg-[#1e2130]"></div></div>
+            <div class="space-y-2">
+              <div class="p-3 rounded-xl bg-[#1c1e2e] border border-[#2a2d45] hover-lift cursor-pointer"><div class="text-[12px] font-medium leading-tight">Analyze this architecture diagram</div><div class="flex justify-between mt-1.5 text-[10px]"><span class="text-[#3fb950]">● VisionWorker</span><span class="text-[#71717a]">2:45 PM</span></div></div>
+              <div class="p-2.5 rounded-xl hover:bg-[#1c1e2e]/60 cursor-pointer"><div class="text-[12px] text-[#a1a1aa] truncate">Explain quantum computing</div><div class="text-[10px] text-[#71717a] text-right mt-1">1:12 PM</div></div>
+              <div class="p-2.5 rounded-xl hover:bg-[#1c1e2e]/60 cursor-pointer"><div class="text-[12px] text-[#a1a1aa] truncate">Build a Python web scraper</div><div class="text-[10px] text-[#71717a] text-right mt-1">11:03 AM</div></div>
+            </div>
+          </div>
+
+          <div class="rounded-xl bg-[#12121a]/80 border border-[#1e2130] p-3">
+            <div class="text-[10px] font-bold tracking-[0.1em] text-[#71717a] uppercase mb-2">System Status</div>
+            <div class="space-y-2 text-[11px]"><div class="flex justify-between"><span class="text-[#a1a1aa]">Engine</span><span class="text-[#3fb950] font-semibold flex items-center gap-1"><span class="w-1.5 h-1.5 bg-[#3fb950] rounded-full animate-pulse"></span>Online</span></div><div class="flex justify-between"><span class="text-[#a1a1aa]">Model</span><span class="font-mono text-[10px]">llama-3.3-70b</span></div></div>
+          </div>
+
+          <div class="flex items-center gap-3 p-2.5 rounded-xl bg-[#1c1e2e]/80 border border-[#1e2130]"><img src="https://i.pravatar.cc/100?img=12" class="w-8 h-8 rounded-[8px]"/><div class="flex-1 leading-tight"><div class="text-[13px] font-semibold">gamp</div><div class="text-[10px] text-[#71717a]">Builder → Architect</div></div><span class="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-gradient-to-br from-[#667eea] to-[#f093fb] text-white">PRO</span></div>
+        </div>
+      </aside>
+
+      <!-- CENTER: independent scroll, sticky composer -->
+      <main class="flex-1 flex flex-col overflow-hidden min-w-0 bg-[#0a0a0f]">
+        <div id="centerPane" class="scroll-pane flex-1 p-4 lg:p-5 space-y-5 pb-[120px]">
+          <div class="space-y-2"><div class="flex items-center gap-2 text-[14px] font-semibold"><i data-lucide="hand" class="w-4 h-4 text-[#f59e0b]"></i>Welcome back, gamp</div><div class="text-[13px] text-[#a1a1aa] ml-6">How can I help accelerate your intelligence today?</div><div class="ml-6 mt-3 inline-flex px-4 py-2.5 rounded-xl bg-[#1c1e2e] border border-[#1e2130] text-[13px] text-[#a1a1aa] hover-lift cursor-pointer">Research computational thinking and summarize it into study notes.</div></div>
+
+          <div class="sticky top-0 z-20 -mx-1 px-2 py-2.5 glass border border-[#1e2130]/60 rounded-xl flex items-center gap-2 text-[11px] backdrop-blur-xl"><i data-lucide="brain" class="w-4 h-4 text-[#667eea]"></i><span class="font-semibold text-[#a1a1aa]">SAGE</span><div class="flex items-center gap-1.5 ml-2"><span class="px-2.5 h-6 grid place-items-center rounded-full bg-[#3fb950]/10 border border-[#3fb950]/20 text-[#3fb950] font-semibold text-[10px]">Normalize ✓</span><span class="w-3 h-px bg-[#2a2d45]"></span><span class="px-2.5 h-6 grid place-items-center rounded-full bg-[#3fb950]/10 border border-[#3fb950]/20 text-[#3fb950] font-semibold text-[10px]">Classify ✓</span><span class="w-3 h-px bg-[#2a2d45]"></span><span class="px-2.5 h-6 grid place-items-center rounded-full bg-[#3fb950]/10 border border-[#3fb950]/20 text-[#3fb950] font-semibold text-[10px]">Validate ✓</span><span class="w-3 h-px bg-[#2a2d45]"></span><span class="px-2.5 h-6 grid place-items-center rounded-full bg-[#667eea]/15 border border-[#667eea]/30 text-[#a78bfa] font-semibold text-[10px]">Route → WebWorker</span></div></div>
+
+          <div class="flex justify-end"><div class="max-w-[75%] px-[18px] py-[13px] rounded-[20px_20px_6px_20px] bg-gradient-to-br from-[#667eea] to-[#764ba2] text-white text-[13.5px] leading-[1.6] shadow-[0_4px_20px_rgba(102,126,234,0.3)]">Research computational thinking and summarize it into study notes.</div></div>
+
+          <div class="space-y-0">
+            <div class="flex items-center gap-2 mb-2 text-[11px] text-[#71717a]"><div class="w-7 h-7 rounded-lg bg-[#1c1e2e] border border-[#1e2130] grid place-items-center"><i data-lucide="brain-circuit" class="w-4 h-4 text-[#a78bfa]"></i></div>SAGE • WebWorker • 2:34 PM</div>
+            <div class="rounded-t-[14px] glass-card p-4 border-b-0"><div class="flex items-center gap-1.5 text-[11px] font-bold text-[#3fb950] uppercase mb-3"><i data-lucide="check-circle-2" class="w-4 h-4"></i>Intent Recognized</div><div class="grid grid-cols-3 md:grid-cols-6 gap-2"><div class="space-y-1"><div class="text-[9px] font-bold tracking-widest text-[#71717a] uppercase">Task</div><div class="px-2 py-1 rounded-lg bg-[#58a6ff]/10 border border-[#58a6ff]/20 text-[10px] font-mono font-semibold text-[#58a6ff]">RESEARCH</div></div><div class="space-y-1"><div class="text-[9px] font-bold tracking-widest text-[#71717a] uppercase">Domain</div><div class="px-2 py-1 rounded-lg bg-[#1e2130] text-[10px] font-mono">Comp. Sci</div></div><div class="space-y-1"><div class="text-[9px] font-bold tracking-widest text-[#71717a] uppercase">Priority</div><div class="px-2 py-1 rounded-lg bg-[#e3b341]/10 text-[10px] font-mono text-[#e3b341] flex items-center gap-1"><i data-lucide="zap" class="w-3 h-3"></i>NORMAL</div></div><div class="space-y-1"><div class="text-[9px] font-bold tracking-widest text-[#71717a] uppercase">Output</div><div class="px-2 py-1 rounded-lg bg-[#1e2130] text-[10px] font-mono text-[#a78bfa]">STUDY NOTES</div></div><div class="space-y-1"><div class="text-[9px] font-bold tracking-widest text-[#71717a] uppercase">Agent</div><div class="px-2 py-1 rounded-lg bg-[#1e2130] text-[10px] font-mono">WebWorker</div></div><div class="space-y-1"><div class="text-[9px] font-bold tracking-widest text-[#71717a] uppercase">Conf</div><div class="px-2 py-1 rounded-lg bg-[#3fb950]/10 text-[10px] font-mono text-[#3fb950]">0.96</div></div></div></div>
+            <div class="rounded-b-[14px] bg-[rgba(24,24,37,0.9)] backdrop-blur border border-t-0 border-[#1e2130] overflow-hidden"><div class="h-10 flex items-center justify-between px-4 bg-[#0f0f17]/60 border-b border-[#1e2130] text-[11px] font-semibold text-[#a1a1aa]"><span class="flex items-center gap-1.5"><i data-lucide="globe" class="w-3.5 h-3.5 text-[#58a6ff]"></i>Web Intelligence Report</span><span class="text-[10px] text-[#71717a]">2:34:45 PM</span></div><div class="p-6 text-[13.5px] leading-[1.7] space-y-3"><h3 class="font-semibold text-[14px]">Computational Thinking — Study Notes</h3><p class="text-[#a1a1aa] text-[13px]">Computational thinking (CT) is a problem-solving process that involves decomposition, pattern recognition, abstraction, and algorithm design...</p><ul class="space-y-1"><li class="flex gap-2"><span class="text-[#667eea]">•</span>Decomposition — break down complex problems</li><li class="flex gap-2"><span class="text-[#667eea]">•</span>Pattern Recognition — identify similarities</li><li class="flex gap-2"><span class="text-[#667eea]">•</span>Abstraction — focus on relevant info</li><li class="flex gap-2"><span class="text-[#667eea]">•</span>Algorithm Design — step-by-step solutions</li></ul></div><div class="h-11 flex items-center gap-2 px-4 bg-[#12121a]/60 border-t border-[#1e2130]"><button class="h-7 px-3 rounded-lg bg-[#1c1e2e] border border-[#1e2130] text-[11px] text-[#a1a1aa] flex items-center gap-1.5 hover:bg-[#252836]"><i data-lucide="copy" class="w-3.5 h-3.5"></i>Copy</button><button class="h-7 px-3 rounded-lg bg-[#1c1e2e] border border-[#1e2130] text-[11px] text-[#a1a1aa] flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i>Export</button></div></div>
+          </div>
+        </div>
+
+        <!-- Composer sticky bottom, independent -->
+        <div class="shrink-0 p-3 pt-3 bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f]/90 to-transparent">
+          <div class="rounded-[16px] bg-[rgba(28,30,46,0.92)] backdrop-blur-[20px] border border-[rgba(102,126,234,0.22)] shadow-[0_8px_32px_rgba(0,0,0,0.35)] p-2.5 flex items-center gap-2 focus-within:border-[#667eea] focus-within:shadow-[0_0_0_4px_rgba(102,126,234,0.15)] transition-all">
+            <div class="flex items-center gap-1"><button class="w-8 h-8 rounded-[9px] bg-[#1e2130] border border-[#1e2130] grid place-items-center text-[#71717a] hover:text-white hover:bg-[#252836]"><i data-lucide="paperclip" class="w-4 h-4"></i></button><button class="w-8 h-8 rounded-[9px] bg-[#1e2130] grid place-items-center text-[#71717a] hover:text-white"><i data-lucide="mic" class="w-4 h-4"></i></button><button class="w-8 h-8 rounded-[9px] bg-[#1e2130] grid place-items-center text-[#71717a] hover:text-white"><i data-lucide="globe" class="w-4 h-4"></i></button></div>
+            <input id="input" placeholder="Ask anything… (text, voice, or upload)" class="flex-1 bg-transparent outline-none text-[13.5px] placeholder:text-[#71717a]"/>
+            <button onclick="send()" class="w-9 h-9 rounded-[10px] bg-gradient-to-br from-[#667eea] to-[#764ba2] text-white grid place-items-center shadow-[0_4px_12px_rgba(102,126,234,0.3)] hover:-translate-y-0.5 transition-transform"><i data-lucide="send" class="w-4 h-4"></i></button>
+          </div>
+          <div class="text-center mt-2 text-[10px] text-[#3a3d5a]">See. Listen. Think. Respond. — SAGE</div>
+        </div>
+      </main>
+
+      <!-- RIGHT: independent scroll -->
+      <aside class="w-[300px] hidden xl:flex flex-col border-l border-[#1e2130] bg-[rgba(15,15,23,0.55)] backdrop-blur-[16px] shrink-0">
+        <div class="scroll-pane flex-1 p-3 space-y-3">
+          <div class="rounded-[14px] bg-[#0f0f17]/70 border border-[#1e2130] p-4"><div class="text-[10px] font-bold tracking-[0.12em] text-[#71717a] uppercase mb-3">Tools</div><div class="space-y-2">
+            <div class="flex items-center gap-3 p-2.5 rounded-xl bg-[#1c1e2e]/60 border border-[#1e2130] hover:bg-[#252836] hover:-translate-y-0.5 transition-all cursor-pointer"><div class="w-8 h-8 rounded-[9px] bg-[#58a6ff]/10 border border-[#58a6ff]/20 grid place-items-center text-[#58a6ff]"><i data-lucide="globe" class="w-4 h-4"></i></div><div class="flex-1"><div class="text-[12px] font-semibold">Web Search</div><div class="text-[10px] text-[#71717a]">Search the internet</div></div></div>
+            <div class="flex items-center gap-3 p-2.5 rounded-xl bg-[#1c1e2e]/60 border border-[#1e2130] hover:bg-[#252836] transition-all cursor-pointer"><div class="w-8 h-8 rounded-[9px] bg-[#a78bfa]/10 border border-[#a78bfa]/20 grid place-items-center text-[#a78bfa]"><i data-lucide="image" class="w-4 h-4"></i></div><div class="flex-1"><div class="text-[12px] font-semibold">Image Analysis</div><div class="text-[10px] text-[#71717a]">Analyze uploaded images</div></div></div>
+            <div class="flex items-center gap-3 p-2.5 rounded-xl bg-[#1c1e2e]/60 border border-[#1e2130] hover:bg-[#252836] transition-all cursor-pointer"><div class="w-8 h-8 rounded-[9px] bg-[#f093fb]/10 border border-[#f093fb]/20 grid place-items-center text-[#f093fb]"><i data-lucide="palette" class="w-4 h-4"></i></div><div class="flex-1"><div class="text-[12px] font-semibold">Image Generation</div><div class="text-[10px] text-[#71717a]">AI images</div></div></div>
+          </div></div>
+          <div class="rounded-[14px] bg-[#0f0f17]/70 border border-[#1e2130] p-4"><div class="text-[10px] font-bold tracking-[0.12em] text-[#71717a] uppercase mb-2">Session Stats</div><div class="space-y-2 text-[11px]"><div class="flex justify-between"><span class="text-[#a1a1aa]">Total Queries</span><span class="font-mono font-semibold">24</span></div><div class="flex justify-between"><span class="text-[#a1a1aa]">Success</span><span class="font-mono">23</span></div><div class="flex justify-between"><span class="text-[#a1a1aa]">Rate</span><span class="font-mono text-[#3fb950]">96.8%</span></div></div></div>
+          <div class="rounded-[14px] bg-[#0f0f17]/70 border border-[#1e2130] p-4"><div class="text-[10px] font-bold tracking-[0.12em] text-[#71717a] uppercase mb-2">Intent Inspector</div><div class="space-y-1.5 text-[11px]"><div class="flex justify-between"><span class="text-[#a1a1aa]">Task</span><span class="font-mono text-[#a78bfa] text-[10px]">ANALYZE</span></div><div class="flex justify-between"><span class="text-[#a1a1aa]">Agent</span><span class="font-mono text-[#667eea] text-[10px]">VisionWorker</span></div><div class="flex justify-between"><span class="text-[#a1a1aa]">Status</span><span class="font-mono text-[#3fb950] text-[10px]">COMPLETED ✓</span></div></div></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+<script>lucide.createIcons(); const pane=document.getElementById('centerPane'); function send(){const i=document.getElementById('input'); if(!i.value.trim())return; const d=document.createElement('div'); d.className='flex justify-end'; d.innerHTML=`<div class="max-w-[75%] px-[18px] py-[13px] rounded-[20px_20px_6px_20px] bg-gradient-to-br from-[#667eea] to-[#764ba2] text-white text-[13.5px]">${i.value}</div>`; pane.appendChild(d); pane.scrollTop=pane.scrollHeight; i.value='';}</script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1eafe0c793bc3e3',t:'MTc4NDY0NTE1Nw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>

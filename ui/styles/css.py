@@ -1,6 +1,6 @@
 """
-ui/styles/css.py
-OWNS: Complete CSS stylesheet injection
+ui/styles/css.py — V2 EFFICIENT PREMIUM
+OWNS: Complete CSS stylesheet injection with fixed scroll panes
 EXPOSES: inject_css()
 FORBIDDEN: Python logic beyond styling
 """
@@ -10,827 +10,448 @@ from .palette import *
 def inject_css():
     css = f"""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap');
 
-    /* GLOBAL RESET */
     html, body, [class*="css"] {{
         font-family: 'Inter', sans-serif !important;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
     }}
 
+    /* ===== EFFICIENCY CORE FIX ===== */
+    html {{
+        overflow: hidden !important;
+        height: 100vh !important;
+    }}
+    body {{
+        overflow: hidden !important;
+        height: 100vh !important;
+        margin: 0 !important;
+    }}
     .stApp {{
         background: {BG_PRIMARY} !important;
         background-image: 
-            radial-gradient(ellipse at top left, rgba(102,126,234,0.12) 0%, transparent 60%),
-            radial-gradient(ellipse at bottom right, rgba(118,75,162,0.08) 0%, transparent 60%),
-            radial-gradient(ellipse at center, rgba(240,147,251,0.04) 0%, transparent 70%) !important;
+            radial-gradient(ellipse at 10% -20%, rgba(102,126,234,0.18) 0%, transparent 55%),
+            radial-gradient(ellipse at 90% 120%, rgba(118,75,162,0.12) 0%, transparent 50%),
+            radial-gradient(ellipse at 50% 50%, rgba(240,147,251,0.03) 0%, transparent 70%) !important;
+        height: 100vh !important;
+        overflow: hidden !important;
+        display: flex;
+        flex-direction: column;
+    }}
+    .main .block-container {{
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        height: 100vh !important;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden !important;
+    }}
+    section[data-testid="stVerticalBlock"] {{
+        gap: 0 !important;
+        height: 100vh;
+        overflow: hidden;
     }}
 
-    /* Hide default Streamlit chrome */
+    /* Hide chrome */
     #MainMenu {{visibility: hidden;}}
     footer {{visibility: hidden;}}
     header {{visibility: hidden;}}
     .stDeployButton {{display: none;}}
     [data-testid="stStatusWidget"] {{display: none;}}
+    [data-testid="stToolbar"] {{display: none;}}
 
-    /* Scrollbar */
-    ::-webkit-scrollbar {{
-        width: 6px;
-        height: 6px;
+    /* Independent scroll panes — THE FIX */
+    [data-testid="stHorizontalBlock"] {{
+        height: calc(100vh - 56px) !important; /* header 56px */
+        overflow: hidden !important;
+        align-items: stretch !important;
+        gap: 0 !important;
+        flex: 1;
+        display: flex !important;
     }}
-    ::-webkit-scrollbar-track {{
-        background: {BG_PRIMARY};
+    [data-testid="column"] {{
+        height: calc(100vh - 56px) !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding: 0 10px !important;
+        scrollbar-width: thin;
+        scrollbar-color: {BORDER_MEDIUM} transparent;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
     }}
-    ::-webkit-scrollbar-thumb {{
+    /* Left panel sticky */
+    [data-testid="column"]:nth-child(1) {{
+        background: linear-gradient(180deg, {BG_SECONDARY} 0%, rgba(15,15,23,0.96) 100%);
+        border-right: 1px solid {BORDER_SUBTLE};
+        backdrop-filter: blur(20px);
+        padding: 0 0 20px 0 !important;
+    }}
+    /* Center workspace - main scroll */
+    [data-testid="column"]:nth-child(2) {{
+        background: transparent;
+        padding: 0 16px 100px 16px !important;
+        scroll-behavior: smooth;
+    }}
+    /* Right inspector fixed */
+    [data-testid="column"]:nth-child(3) {{
+        background: rgba(15,15,23,0.5);
+        border-left: 1px solid {BORDER_SUBTLE};
+        backdrop-filter: blur(16px);
+        padding: 12px 10px !important;
+    }}
+
+    /* Custom scrollbars - premium thin */
+    [data-testid="column"]::-webkit-scrollbar {{
+        width: 4px;
+    }}
+    [data-testid="column"]::-webkit-scrollbar-track {{
+        background: transparent;
+    }}
+    [data-testid="column"]::-webkit-scrollbar-thumb {{
         background: {BORDER_MEDIUM};
-        border-radius: 3px;
+        border-radius: 10px;
     }}
-    ::-webkit-scrollbar-thumb:hover {{
-        background: {BORDER_ACCENT};
-    }}
-
-    /* MAIN CONTAINER - Mission Control Frame */
-    .sage-outer {{
-        border: 1px solid transparent;
-        background: linear-gradient({BG_PRIMARY}, {BG_PRIMARY}) padding-box,
-                    {GRADIENT_BORDER} border-box;
-        border-radius: 16px;
-        overflow: hidden;
-        box-shadow: 
-            0 0 0 1px rgba(102,126,234,0.1),
-            0 20px 60px -20px rgba(102,126,234,0.3),
-            0 0 100px -30px rgba(118,75,162,0.2);
-        margin: 8px;
+    [data-testid="column"]::-webkit-scrollbar-thumb:hover {{
+        background: {ACCENT_PRIMARY};
     }}
 
-    /* HEADER */
+    /* ===== HEADER — sticky ===== */
     .sage-header {{
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        height: 56px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 14px 20px;
-        background: linear-gradient(90deg, {BG_SECONDARY} 0%, {BG_TERTIARY} 100%);
+        padding: 0 20px;
+        background: rgba(15,15,23,0.85);
+        backdrop-filter: blur(24px) saturate(1.2);
         border-bottom: 1px solid {BORDER_SUBTLE};
-    }}
-    .sage-logo {{
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }}
-    .sage-logo-icon {{
-        width: 36px;
-        height: 36px;
-        background: {GRADIENT_PRIMARY};
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 20px;
-        box-shadow: 0 4px 12px rgba(102,126,234,0.3);
+        flex-shrink: 0;
     }}
     .sage-logo-text {{
+        font-family: 'Space Grotesk', sans-serif !important;
         font-size: 22px;
-        font-weight: 800;
-        letter-spacing: -0.02em;
+        font-weight: 700;
+        letter-spacing: -0.03em;
         background: {GRADIENT_TEXT};
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
     }}
-    .sage-logo-sub {{
-        font-size: 11px;
-        color: {TEXT_MUTED};
-        letter-spacing: 0.05em;
-        margin-top: -4px;
-    }}
-    .sage-header-right {{
-        display: flex;
-        gap: 12px;
-        align-items: center;
-    }}
-    .sage-pill {{
-        background: {BG_INPUT};
-        border: 1px solid {BORDER_SUBTLE};
-        border-radius: 20px;
-        padding: 6px 14px;
-        font-size: 11px;
-        color: {TEXT_SECONDARY};
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }}
-    .sage-dot {{
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: {SUCCESS};
-        box-shadow: 0 0 8px {SUCCESS};
-        animation: pulse 2s infinite;
-    }}
-    @keyframes pulse {{
-        0%, 100% {{opacity: 1;}}
-        50% {{opacity: 0.5;}}
-    }}
 
-    /* SIDEBAR - Left Nav */
-    .sage-sidebar {{
-        background: {BG_SECONDARY};
-        border-right: 1px solid {BORDER_SUBTLE};
-        padding: 16px 12px;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
+    /* ===== PREMIUM ICON SYSTEM — SVG not emoji ===== */
+    .icon {{
+        width: 18px;
+        height: 18px;
+        stroke-width: 1.6;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }}
-    .sage-nav-button {{
+    .icon-sm {{width: 14px; height: 14px;}}
+    .icon-lg {{width: 22px; height: 22px;}}
+
+    /* Nav items with SVG */
+    .sage-nav-item {{
         display: flex;
         align-items: center;
-        gap: 10px;
-        padding: 10px 12px;
-        border-radius: 8px;
+        gap: 12px;
+        padding: 10px 14px;
+        border-radius: 10px;
         color: {TEXT_SECONDARY};
         font-size: 13px;
         font-weight: 500;
         cursor: pointer;
-        transition: all 0.2s;
+        transition: all 0.22s cubic-bezier(0.2,0,0,1);
         border: 1px solid transparent;
-        width: 100%;
-        text-align: left;
-        background: transparent;
+        margin-bottom: 2px;
+        position: relative;
+        overflow: hidden;
     }}
-    .sage-nav-button:hover {{
+    .sage-nav-item::before {{
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, rgba(102,126,234,0.08), transparent);
+        opacity: 0;
+        transition: opacity 0.22s;
+    }}
+    .sage-nav-item:hover {{
         background: {BG_HOVER};
         color: {TEXT_PRIMARY};
-        border-color: {BORDER_SUBTLE};
+        border-color: rgba(102,126,234,0.15);
+        transform: translateX(2px);
     }}
-    .sage-nav-button.active {{
-        background: {GRADIENT_BUTTON};
-        color: white;
-        box-shadow: 0 4px 12px rgba(102,126,234,0.25);
+    .sage-nav-item:hover::before {{opacity: 1;}}
+    .sage-nav-item.active {{
+        background: linear-gradient(135deg, rgba(102,126,234,0.15) 0%, rgba(118,75,162,0.12) 100%);
+        border-color: rgba(102,126,234,0.25);
+        color: {TEXT_PRIMARY};
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 12px rgba(102,126,234,0.12);
     }}
-    .sage-new-chat {{
+    .sage-nav-item.active svg {{
+        stroke: {ACCENT_PRIMARY};
+    }}
+
+    /* New Chat premium button */
+    .stButton > button[kind="primary"],
+    button[data-testid="stBaseButton-primary"] {{
         background: {GRADIENT_BUTTON} !important;
-        color: white !important;
-        border-radius: 10px !important;
-        justify-content: space-between !important;
+        border: none !important;
+        border-radius: 12px !important;
         font-weight: 600 !important;
-        box-shadow: 0 4px 16px rgba(102,126,234,0.3) !important;
-        margin-bottom: 12px;
+        letter-spacing: -0.01em !important;
+        box-shadow: 0 2px 10px rgba(102,126,234,0.3), inset 0 1px 0 rgba(255,255,255,0.15) !important;
+        transition: all 0.22s cubic-bezier(0.2,0,0,1) !important;
+        position: relative;
+        overflow: hidden;
     }}
-    .sage-system-status {{
-        background: {BG_TERTIARY};
-        border: 1px solid {BORDER_SUBTLE};
-        border-radius: 12px;
-        padding: 14px;
-        margin-top: auto;
+    .stButton > button:hover {{
+        transform: translateY(-1px) scale(1.01) !important;
+        box-shadow: 0 6px 20px rgba(102,126,234,0.4), inset 0 1px 0 rgba(255,255,255,0.2) !important;
     }}
-    .sage-status-header {{
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        color: {TEXT_MUTED};
-        text-transform: uppercase;
-        margin-bottom: 12px;
-    }}
-    .sage-status-row {{
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 8px;
-        font-size: 11px;
-    }}
-    .sage-status-label {{
-        color: {TEXT_SECONDARY};
-    }}
-    .sage-status-value {{
-        color: {TEXT_PRIMARY};
-        font-weight: 500;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 10px;
-    }}
-    .sage-status-value.online {{
-        color: {SUCCESS};
-    }}
-    .sage-profile {{
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 10px;
-        background: {BG_CARD};
-        border: 1px solid {BORDER_SUBTLE};
-        border-radius: 10px;
-        margin-top: 12px;
-    }}
-    .sage-avatar {{
-        width: 32px;
-        height: 32px;
-        border-radius: 8px;
-        background: {GRADIENT_PRIMARY};
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-        font-size: 14px;
-        color: white;
-    }}
-    .sage-profile-info {{
-        flex: 1;
-        line-height: 1.2;
-    }}
-    .sage-profile-name {{
-        font-size: 13px;
-        font-weight: 600;
-        color: {TEXT_PRIMARY};
-    }}
-    .sage-profile-role {{
-        font-size: 10px;
-        color: {TEXT_MUTED};
-    }}
-    .sage-pro-badge {{
-        background: {GRADIENT_PRIMARY};
-        color: white;
-        font-size: 9px;
-        font-weight: 700;
-        padding: 3px 6px;
-        border-radius: 4px;
-        letter-spacing: 0.05em;
+    .stButton > button:active {{
+        transform: translateY(0) scale(0.99) !important;
     }}
 
-    /* CHAT / WORKSPACE CENTER */
-    .sage-welcome {{
-        padding: 24px 0 16px 0;
-    }}
-    .sage-welcome-h {{
-        font-size: 15px;
-        font-weight: 600;
-        color: {TEXT_PRIMARY};
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 4px;
-    }}
-    .sage-welcome-sub {{
-        font-size: 13px;
-        color: {TEXT_SECONDARY};
-        margin-left: 28px;
-    }}
-    .sage-prompt-pill {{
-        display: inline-block;
-        background: {BG_CARD};
-        border: 1px solid {BORDER_SUBTLE};
-        border-radius: 12px;
-        padding: 10px 16px;
-        margin: 12px 0;
-        font-size: 13px;
-        color: {TEXT_SECONDARY};
-        max-width: 600px;
-    }}
-
-    /* MESSAGE BUBBLES */
+    /* Message bubbles - efficient compositing */
     .sage-msg-user {{
         background: {GRADIENT_BUTTON};
         color: white;
-        padding: 12px 18px;
-        border-radius: 16px 16px 4px 16px;
-        font-size: 13px;
-        max-width: 75%;
+        padding: 14px 18px;
+        border-radius: 20px 20px 6px 20px;
+        font-size: 13.5px;
+        max-width: 72%;
         margin-left: auto;
-        margin-bottom: 16px;
-        box-shadow: 0 4px 16px rgba(102,126,234,0.2);
-        line-height: 1.5;
+        margin-bottom: 18px;
+        box-shadow: 0 4px 20px rgba(102,126,234,0.25), inset 0 1px 0 rgba(255,255,255,0.15);
+        line-height: 1.6;
+        font-weight: 450;
+        will-change: transform;
+        animation: slideIn 0.35s cubic-bezier(0.2,0,0,1);
+    }}
+    @keyframes slideIn {{
+        from {{ opacity:0; transform: translateY(10px) scale(0.98); }}
+        to {{ opacity:1; transform: translateY(0) scale(1); }}
     }}
     .sage-msg-assistant {{
         display: flex;
-        gap: 12px;
-        margin-bottom: 20px;
+        gap: 14px;
+        margin-bottom: 24px;
+        animation: fadeIn 0.4s ease;
     }}
-    .sage-assistant-avatar {{
-        width: 32px;
-        height: 32px;
-        min-width: 32px;
-        background: {BG_CARD};
-        border: 1px solid {BORDER_SUBTLE};
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 16px;
-        margin-top: 2px;
-    }}
-    .sage-assistant-content {{
-        flex: 1;
-        background: {BG_SURFACE};
-        border: 1px solid {BORDER_SUBTLE};
-        border-radius: 12px;
-        overflow: hidden;
-    }}
+    @keyframes fadeIn {{ from {{opacity:0;}} to {{opacity:1;}} }}
 
-    /* INTENT CARD - Horizontal metadata table */
+    /* Intent card - glass */
     .sage-intent-card {{
-        background: {BG_TERTIARY};
-        border: 1px solid {BORDER_SUBTLE};
-        border-radius: 10px;
-        padding: 14px 16px;
-        margin-bottom: 0;
-        border-bottom-left-radius: 0;
-        border-bottom-right-radius: 0;
+        background: linear-gradient(180deg, rgba(28,30,46,0.9) 0%, rgba(21,21,31,0.9) 100%);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(102,126,234,0.15);
         border-bottom: none;
-    }}
-    .sage-intent-header {{
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 11px;
-        font-weight: 700;
-        color: {SUCCESS};
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        margin-bottom: 12px;
+        border-radius: 14px 14px 0 0;
+        padding: 16px 18px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05);
     }}
     .sage-intent-grid {{
         display: grid;
         grid-template-columns: repeat(6, 1fr);
-        gap: 12px;
-    }}
-    .sage-intent-field {{
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-    }}
-    .sage-intent-label {{
-        font-size: 9px;
-        font-weight: 600;
-        color: {TEXT_MUTED};
-        text-transform: uppercase;
-        letter-spacing: 0.07em;
+        gap: 10px;
     }}
     .sage-intent-value {{
-        font-size: 11px;
+        font-size: 10.5px;
         font-weight: 600;
         font-family: 'JetBrains Mono', monospace;
-        color: {TEXT_PRIMARY};
-        padding: 4px 8px;
-        background: {BG_CARD};
-        border: 1px solid {BORDER_SUBTLE};
-        border-radius: 6px;
-        text-transform: uppercase;
-    }}
-    .sage-intent-value.task {{
-        color: #58a6ff;
-        background: rgba(88,166,255,0.1);
-        border-color: rgba(88,166,255,0.2);
-    }}
-    .sage-intent-value.domain {{
-        color: {TEXT_PRIMARY};
-    }}
-    .sage-intent-value.priority {{
-        color: #e3b341;
-        background: rgba(227,179,65,0.1);
-    }}
-    .sage-intent-value.agent {{
-        color: {TEXT_ACCENT};
-    }}
-    .sage-intent-value.conf {{
-        color: {SUCCESS};
-    }}
-
-    /* RESPONSE CARD */
-    .sage-response-card {{
-        background: {BG_CARD};
-        border: 1px solid {BORDER_SUBTLE};
-        border-top: 1px solid {BORDER_MEDIUM};
-        border-radius: 0 0 12px 12px;
-        padding: 0;
-        overflow: hidden;
-    }}
-    .sage-response-header {{
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 12px 16px;
-        background: {BG_SURFACE};
-        border-bottom: 1px solid {BORDER_SUBTLE};
-        font-size: 11px;
-        font-weight: 600;
-        color: {TEXT_SECONDARY};
-    }}
-    .sage-response-body {{
-        padding: 20px;
-        font-size: 13px;
-        line-height: 1.7;
-        color: {TEXT_PRIMARY};
-    }}
-    .sage-response-body h1, .sage-response-body h2, .sage-response-body h3 {{
-        color: {TEXT_PRIMARY};
-        font-weight: 700;
-        margin-top: 16px;
-        margin-bottom: 8px;
-    }}
-    .sage-response-body code {{
-        background: {BG_INPUT};
-        border: 1px solid {BORDER_SUBTLE};
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 12px;
-    }}
-    .sage-response-body pre {{
-        background: {BG_PRIMARY} !important;
+        padding: 5px 9px;
+        background: rgba(30,33,48,0.8);
         border: 1px solid {BORDER_SUBTLE};
         border-radius: 8px;
-        padding: 14px !important;
-    }}
-    .sage-action-bar {{
-        display: flex;
-        gap: 8px;
-        padding: 12px 16px;
-        background: {BG_TERTIARY};
-        border-top: 1px solid {BORDER_SUBTLE};
-    }}
-    .sage-action-btn {{
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 12px;
-        background: {BG_CARD};
-        border: 1px solid {BORDER_SUBTLE};
-        border-radius: 6px;
-        color: {TEXT_SECONDARY};
-        font-size: 11px;
-        cursor: pointer;
-        transition: all 0.2s;
-    }}
-    .sage-action-btn:hover {{
-        background: {BG_HOVER};
-        color: {TEXT_PRIMARY};
-        border-color: {BORDER_MEDIUM};
-    }}
-
-    /* RIGHT PANEL - Intelligence */
-    .sage-right-panel {{
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-    }}
-    .sage-panel-section {{
-        background: {BG_SECONDARY};
-        border: 1px solid {BORDER_SUBTLE};
-        border-radius: 12px;
-        padding: 16px;
-    }}
-    .sage-panel-title {{
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: {TEXT_MUTED};
-        margin-bottom: 14px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }}
-    .sage-tools-grid {{
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 8px;
-    }}
-    .sage-tool-item {{
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 10px 12px;
-        background: {BG_CARD};
-        border: 1px solid {BORDER_SUBTLE};
-        border-radius: 8px;
-        cursor: pointer;
+        letter-spacing: 0.02em;
         transition: all 0.2s;
     }}
-    .sage-tool-item:hover {{
-        background: {BG_HOVER};
-        border-color: {BORDER_MEDIUM};
+    .sage-intent-value:hover {{
+        border-color: rgba(102,126,234,0.3);
         transform: translateY(-1px);
     }}
-    .sage-tool-icon {{
-        width: 32px;
-        height: 32px;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 16px;
-        background: {BG_INPUT};
+
+    /* Response card */
+    .sage-response-card {{
+        background: rgba(24,24,37,0.85);
+        backdrop-filter: blur(20px);
         border: 1px solid {BORDER_SUBTLE};
+        border-top: 1px solid rgba(42,45,69,0.8);
+        border-radius: 0 0 14px 14px;
+        overflow: hidden;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.25);
     }}
-    .sage-tool-info {{
-        flex: 1;
-        line-height: 1.2;
-    }}
-    .sage-tool-name {{
-        font-size: 12px;
-        font-weight: 600;
+    .sage-response-body {{
+        padding: 22px 24px;
+        font-size: 13.5px;
+        line-height: 1.75;
         color: {TEXT_PRIMARY};
     }}
-    .sage-tool-desc {{
-        font-size: 10px;
-        color: {TEXT_MUTED};
-        margin-top: 2px;
-    }}
-    .sage-session-row {{
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 8px 0;
-        border-bottom: 1px solid {BORDER_SUBTLE};
-        font-size: 11px;
-    }}
-    .sage-session-row:last-child {{
-        border-bottom: none;
-    }}
-    .sage-session-label {{
-        color: {TEXT_SECONDARY};
-    }}
-    .sage-session-value {{
-        color: {TEXT_PRIMARY};
-        font-family: 'JetBrains Mono', monospace;
-        font-weight: 600;
-        font-size: 11px;
-    }}
-    .sage-session-value.green {{
-        color: {SUCCESS};
-    }}
 
-    /* INSPECTOR */
-    .sage-inspector-row {{
-        display: flex;
-        justify-content: space-between;
-        padding: 7px 0;
-        font-size: 11px;
-        border-bottom: 1px solid rgba(30,33,48,0.6);
+    /* Tools - premium hover */
+    .sage-tools-grid {{ gap: 8px; }}
+    .sage-tool-item {{
+        background: rgba(28,30,46,0.6);
+        backdrop-filter: blur(12px);
+        border: 1px solid {BORDER_SUBTLE};
+        border-radius: 12px;
+        padding: 12px 14px;
+        transition: all 0.24s cubic-bezier(0.2,0,0,1);
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
     }}
-    .sage-inspector-row:last-child {{border-bottom: none;}}
-    .sage-inspector-label {{color: {TEXT_SECONDARY}; font-size: 11px;}}
-    .sage-inspector-value {{color: {TEXT_PRIMARY}; font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 10px; text-align: right; max-width: 140px; overflow: hidden; text-overflow: ellipsis;}}
+    .sage-tool-item::after {{
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+        transition: left 0.6s;
+    }}
+    .sage-tool-item:hover {{
+        background: rgba(37,40,54,0.9);
+        border-color: rgba(102,126,234,0.25);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.25), 0 0 0 1px rgba(102,126,234,0.1);
+    }}
+    .sage-tool-item:hover::after {{ left: 100%; }}
 
-    /* PIPELINE VIZ */
+    /* Pipeline dots */
     .sage-pipeline {{
         display: flex;
         align-items: center;
-        gap: 6px;
-        padding: 12px 0;
-        overflow-x: auto;
-    }}
-    .sage-pipeline-step {{
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 6px;
-        min-width: 70px;
-    }}
-    .sage-pipeline-dot {{
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 12px;
-        border: 2px solid {BORDER_SUBTLE};
-        background: {BG_CARD};
-        color: {TEXT_MUTED};
-        transition: all 0.3s;
-    }}
-    .sage-pipeline-dot.active {{
-        background: {ACCENT_PRIMARY};
-        border-color: {ACCENT_PRIMARY};
-        color: white;
-        box-shadow: 0 0 12px rgba(102,126,234,0.5);
-        animation: pulse-dot 1.5s infinite;
-    }}
-    .sage-pipeline-dot.done {{
-        background: {SUCCESS};
-        border-color: {SUCCESS};
-        color: white;
-    }}
-    @keyframes pulse-dot {{
-        0%, 100% {{ box-shadow: 0 0 12px rgba(102,126,234,0.5); }}
-        50% {{ box-shadow: 0 0 20px rgba(102,126,234,0.8); }}
-    }}
-    .sage-pipeline-label {{
-        font-size: 9px;
-        font-weight: 600;
-        color: {TEXT_MUTED};
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }}
-    .sage-pipeline-label.active {{color: {TEXT_ACCENT};}}
-    .sage-pipeline-label.done {{color: {SUCCESS};}}
-    .sage-pipeline-line {{
-        width: 24px;
-        height: 2px;
-        background: {BORDER_SUBTLE};
-        margin-bottom: 18px;
-    }}
-    .sage-pipeline-line.done {{
-        background: {SUCCESS};
+        gap: 8px;
+        padding: 14px 4px;
+        background: rgba(15,15,23,0.6);
+        border: 1px solid {BORDER_SUBTLE};
+        border-radius: 12px;
+        backdrop-filter: blur(12px);
+        margin-bottom: 16px;
+        position: sticky;
+        top: 0;
+        z-index: 10;
     }}
 
-    /* COMPOSER - Universal */
+    /* Composer - fixed bottom efficient */
+    .composer-wrapper {{
+        position: sticky;
+        bottom: 0;
+        z-index: 20;
+        background: linear-gradient(180deg, transparent 0%, rgba(10,10,15,0.9) 30%, {BG_PRIMARY} 70%);
+        backdrop-filter: blur(20px);
+        padding: 16px 0 12px 0;
+        margin-top: 20px;
+    }}
     .sage-composer {{
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        background: {BG_CARD};
-        border: 1px solid {BORDER_SUBTLE};
-        border-radius: 14px;
+        background: rgba(28,30,46,0.9);
+        backdrop-filter: blur(20px) saturate(1.2);
+        border: 1px solid rgba(102,126,234,0.2);
+        border-radius: 16px;
         padding: 12px 14px;
-        margin-top: 16px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-        transition: all 0.2s;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06);
+        transition: all 0.22s;
     }}
     .sage-composer:focus-within {{
         border-color: {ACCENT_PRIMARY};
-        box-shadow: 0 0 0 3px rgba(102,126,234,0.15), 0 4px 20px rgba(0,0,0,0.2);
-    }}
-    .sage-composer-icons {{
-        display: flex;
-        gap: 6px;
-    }}
-    .sage-composer-icon {{
-        width: 32px;
-        height: 32px;
-        border-radius: 8px;
-        background: {BG_INPUT};
-        border: 1px solid {BORDER_SUBTLE};
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        color: {TEXT_SECONDARY};
-        transition: all 0.2s;
-    }}
-    .sage-composer-icon:hover {{
-        background: {BG_HOVER};
-        color: {TEXT_PRIMARY};
-        border-color: {BORDER_MEDIUM};
-    }}
-    .sage-composer-input {{
-        flex: 1;
-        background: transparent;
-        border: none;
-        outline: none;
-        color: {TEXT_PRIMARY};
-        font-size: 13px;
-        font-family: 'Inter', sans-serif;
-    }}
-    .sage-composer-input::placeholder {{
-        color: {TEXT_MUTED};
-    }}
-    .sage-send-btn {{
-        width: 36px;
-        height: 36px;
-        border-radius: 10px;
-        background: {GRADIENT_BUTTON};
-        border: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        cursor: pointer;
-        box-shadow: 0 4px 12px rgba(102,126,234,0.3);
-        transition: all 0.2s;
-    }}
-    .sage-send-btn:hover {{
+        box-shadow: 0 0 0 4px rgba(102,126,234,0.15), 0 8px 32px rgba(0,0,0,0.3);
         transform: translateY(-1px);
-        box-shadow: 0 6px 16px rgba(102,126,234,0.4);
     }}
 
-    /* ATTACHMENTS */
-    .sage-attachment-preview {{
-        background: {BG_TERTIARY};
-        border: 1px solid {BORDER_SUBTLE};
+    /* Scrollbar premium */
+    ::-webkit-scrollbar {{ width: 5px; height: 5px; }}
+    ::-webkit-scrollbar-track {{ background: transparent; }}
+    ::-webkit-scrollbar-thumb {{
+        background: linear-gradient(180deg, {BORDER_MEDIUM}, {BORDER_ACCENT});
         border-radius: 10px;
-        padding: 10px;
-        display: flex;
-        gap: 12px;
-        align-items: center;
-        margin-bottom: 12px;
     }}
-    .sage-attachment-thumb {{
-        width: 48px;
-        height: 48px;
-        border-radius: 8px;
-        object-fit: cover;
-        background: {BG_CARD};
-        border: 1px solid {BORDER_SUBTLE};
-    }}
+    ::-webkit-scrollbar-thumb:hover {{ background: {ACCENT_PRIMARY}; }}
 
-    /* CONVERSATION LIST */
-    .sage-conv-item {{
-        padding: 10px 12px;
-        border-radius: 8px;
-        cursor: pointer;
-        transition: all 0.2s;
-        border: 1px solid transparent;
-        margin-bottom: 4px;
-    }}
-    .sage-conv-item:hover {{
-        background: {BG_HOVER};
-        border-color: {BORDER_SUBTLE};
-    }}
-    .sage-conv-item.active {{
-        background: {BG_CARD};
-        border-color: {BORDER_MEDIUM};
-    }}
-    .sage-conv-title {{
-        font-size: 12px;
-        font-weight: 500;
-        color: {TEXT_PRIMARY};
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }}
-    .sage-conv-time {{
-        font-size: 10px;
-        color: {TEXT_MUTED};
-        margin-top: 2px;
-    }}
-
-    /* STREAMLIT OVERRIDES */
+    /* Text input */
     .stTextInput > div > div > input {{
-        background: {BG_CARD} !important;
+        background: rgba(28,30,46,0.8) !important;
+        backdrop-filter: blur(12px);
         border: 1px solid {BORDER_SUBTLE} !important;
-        border-radius: 10px !important;
+        border-radius: 12px !important;
         color: {TEXT_PRIMARY} !important;
-        font-size: 13px !important;
+        font-size: 13.5px !important;
+        transition: all 0.22s !important;
+        height: 44px !important;
     }}
     .stTextInput > div > div > input:focus {{
         border-color: {ACCENT_PRIMARY} !important;
-        box-shadow: 0 0 0 3px rgba(102,126,234,0.15) !important;
-    }}
-    .stButton > button {{
-        background: {GRADIENT_BUTTON} !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 8px !important;
-        font-weight: 600 !important;
-        font-size: 12px !important;
-        box-shadow: 0 4px 12px rgba(102,126,234,0.25) !important;
-        transition: all 0.2s !important;
-    }}
-    .stButton > button:hover {{
-        transform: translateY(-1px) !important;
-        box-shadow: 0 6px 16px rgba(102,126,234,0.35) !important;
-    }}
-    .stFileUploader > div {{
-        background: {BG_CARD} !important;
-        border: 1px dashed {BORDER_MEDIUM} !important;
-        border-radius: 10px !important;
+        box-shadow: 0 0 0 4px rgba(102,126,234,0.15) !important;
+        background: rgba(37,40,54,0.9) !important;
     }}
 
-    /* Expander */
-    .streamlit-expanderHeader {{
-        background: {BG_TERTIARY} !important;
-        border: 1px solid {BORDER_SUBTLE} !important;
-        border-radius: 8px !important;
-        color: {TEXT_SECONDARY} !important;
-        font-size: 12px !important;
+    /* Panels */
+    .sage-panel-section {{
+        background: rgba(21,21,31,0.7);
+        backdrop-filter: blur(16px);
+        border: 1px solid {BORDER_SUBTLE};
+        border-radius: 14px;
+        padding: 16px;
+        transition: all 0.22s;
+    }}
+    .sage-panel-section:hover {{
+        border-color: rgba(102,126,234,0.18);
     }}
 
-    /* Hide extra */
-    div[data-testid="stVerticalBlock"] > div:empty {{display: none;}}
-
-    /* AUDIO WAVEFORM */
-    .sage-wave {{
-        display: flex;
-        align-items: center;
-        gap: 2px;
-        height: 32px;
+    .sage-conv-item {{
+        padding: 11px 13px;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.2,0,0,1);
+        border: 1px solid transparent;
+        margin-bottom: 3px;
+        position: relative;
     }}
-    .sage-wave-bar {{
-        width: 3px;
-        background: {GRADIENT_PRIMARY};
-        border-radius: 2px;
-        animation: wave 1s infinite ease-in-out;
+    .sage-conv-item:hover {{
+        background: rgba(37,40,54,0.7);
+        transform: translateX(2px);
     }}
-    @keyframes wave {{
-        0%, 100% {{height: 8px;}}
-        50% {{height: 24px;}}
+    .sage-conv-item.active {{
+        background: linear-gradient(135deg, rgba(102,126,234,0.12), rgba(118,75,162,0.08));
+        border-color: rgba(102,126,234,0.2);
     }}
 
-    /* MARKDOWN OVERRIDES INSIDE RESPONSE */
-    .sage-response-body ul {{
-        padding-left: 18px;
-    }}
-    .sage-response-body li {{
-        margin-bottom: 4px;
-    }}
-
-    /* TO FIX STREAMLIT COLUMNS GAP */
-    [data-testid="column"] {{
-        padding: 0 6px;
+    /* System status */
+    .sage-system-status {{
+        background: rgba(18,18,26,0.8);
+        backdrop-filter: blur(12px);
+        border: 1px solid {BORDER_SUBTLE};
+        border-radius: 12px;
+        padding: 14px;
     }}
 
-    /* MOBILE */
-    @media (max-width: 1200px) {{
+    /* Performance */
+    * {{
+        -webkit-tap-highlight-color: transparent;
+    }}
+    .sage-tool-item, .sage-conv-item, .sage-nav-item {{
+        will-change: transform;
+        contain: layout style;
+    }}
+
+    /* Mobile responsive */
+    @media (max-width: 1100px) {{
+        [data-testid="stHorizontalBlock"] {{
+            flex-direction: column !important;
+            height: auto !important;
+        }}
+        [data-testid="column"] {{
+            height: auto !important;
+            max-height: 50vh;
+        }}
         .sage-intent-grid {{grid-template-columns: repeat(3, 1fr);}}
     }}
     </style>
