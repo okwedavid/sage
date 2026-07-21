@@ -1,19 +1,19 @@
 import streamlit as st
 import sys
 import os
+import re
 
-# Ensure project root is in path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# --- SAGE Core Imports ---
 from config.settings import Settings
 from core.intent.pipeline import IntentPipeline
 from core.intent.enums import TaskType, Status
 from agents.registry import AgentRegistry
 from agents.general_worker import GeneralWorker
+from agents.web_worker import WebWorker
 
 # ==========================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # ==========================================
 st.set_page_config(
     page_title=f"{Settings.APP_NAME} | {Settings.APP_TAGLINE}",
@@ -23,18 +23,13 @@ st.set_page_config(
 )
 
 # ==========================================
-# CUSTOM STYLING
+# STYLING + CLIPBOARD JS
 # ==========================================
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     
-    /* Global Font */
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
-    }
-    
-    /* Header Styling */
     .sage-header {
         text-align: center;
         padding: 1rem 0;
@@ -50,79 +45,95 @@ st.markdown("""
     .sage-header p {
         color: #888;
         font-size: 1rem;
-        margin-top: 0.2rem;
     }
     
-    /* Pipeline Stage Cards */
-    .stage-card {
-        background: #1E1E2E;
-        border-radius: 8px;
-        padding: 0.8rem 1rem;
-        margin: 0.3rem 0;
-        border-left: 3px solid #444;
-        font-size: 0.85rem;
-    }
-    .stage-active {
-        border-left-color: #667eea;
-        background: #262640;
-    }
-    .stage-complete {
-        border-left-color: #4CAF50;
-    }
-    .stage-failed {
-        border-left-color: #f44336;
-    }
-    
-    /* Metadata Tags */
     .intent-tag {
         display: inline-block;
-        background: #333;
-        color: #fff;
         padding: 0.2rem 0.6rem;
         border-radius: 12px;
         font-size: 0.75rem;
         margin-right: 0.4rem;
         margin-bottom: 0.3rem;
+        color: #fff;
     }
     .tag-type { background: #667eea; }
     .tag-domain { background: #764ba2; }
     .tag-agent { background: #e91e63; }
     .tag-status { background: #4CAF50; }
     .tag-confidence { background: #ff9800; }
+    
+    .copy-btn {
+        background: #333;
+        color: #fff;
+        border: 1px solid #555;
+        padding: 0.3rem 0.8rem;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        margin-top: 0.5rem;
+    }
+    .copy-btn:hover { background: #555; }
+    
+    .feature-badge {
+        display: inline-block;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        padding: 0.15rem 0.5rem;
+        border-radius: 10px;
+        font-size: 0.65rem;
+        margin-left: 0.3rem;
+    }
 </style>
+
+<script>
+function copyToClipboard(elementId) {
+    var text = document.getElementById(elementId).innerText;
+    navigator.clipboard.writeText(text).then(function() {
+        // Show brief confirmation
+        var btn = event.target;
+        btn.innerText = '✅ Copied!';
+        setTimeout(function(){ btn.innerText = '📋 Copy'; }, 1500);
+    });
+}
+</script>
 """, unsafe_allow_html=True)
 
 
 # ==========================================
-# SYSTEM BOOT (Runs Once Per Session)
+# BOOT FUNCTION (No caching — dynamic keys)
 # ==========================================
-@st.cache_resource
-def boot_sage(api_key: str):
+def boot_sage(api_key: str) -> IntentPipeline:
     """
-    Initializes the SAGE Pipeline.
-    @st.cache_resource ensures this only runs ONCE,
-    not on every Streamlit re-render.
+    Initializes the full SAGE pipeline with all available workers.
+    Called once per session, stored in session_state.
     """
     registry = AgentRegistry()
     
-    # Register available workers
+    # Register TEXT workers
     general = GeneralWorker(api_key=api_key)
     registry.register_worker("GeneralWorker", general)
     
-    # Build pipeline
-    pipeline = IntentPipeline(api_key=api_key, registry=registry)
+    # Register WEB worker
+    web = WebWorker(api_key=api_key)
+    registry.register_worker("WebWorker", web)
     
+    # Future: Register Image/Video workers here
+    # image = ImageWorker(api_key=stability_key)
+    # registry.register_worker("ImageWorker", image)
+    
+    pipeline = IntentPipeline(api_key=api_key, registry=registry)
     return pipeline
 
 
 # ==========================================
-# SESSION STATE INITIALIZATION
+# SESSION STATE
 # ==========================================
 if "history" not in st.session_state:
     st.session_state.history = []
-
-if "system_ready" not in st.session_state:
-    st.session_state.system_ready = False
+if "pipeline" not in st.session_state:
+    st.session_state.pipeline = None
+if "active_key" not in st.session_state:
+    st.session_state.active_key = None
 
 
 # ==========================================
@@ -135,56 +146,104 @@ with st.sidebar:
     
     st.divider()
     
-    # --- System Status ---
-    st.markdown("#### 🖥️ System Status")
+    # --- API Key Management ---
+    st.markdown("#### 🔑 API Configuration")
     
-    if Settings.validate():
-        st.success(f"🔑 Key: `{Settings.get_masked_key()}`")
-        st.session_state.system_ready = True
+    # Check .env first
+    env_key = Settings.GROQ_API_KEY
+    
+    if env_key:
+        st.success(f"Server Key: `{Settings.get_masked_key()}`")
+        active_key = env_key.strip()
     else:
-        st.error("🔑 No API Key Found in `.env`")
-        st.caption("Create a `.env` file with your `GROQ_API_KEY`")
-        
-        # --- OPTIONAL: Power User Override ---
-        st.divider()
-        st.markdown("#### 🔧 Manual Override")
-        manual_key = st.text_input("Use your own API Key", type="password")
-        if manual_key:
-            Settings.GROQ_API_KEY = manual_key
-            st.session_state.system_ready = True
-            st.success("✅ Manual key accepted")
+        st.warning("No server key found.")
+        active_key = None
+    
+    # Manual override (always available)
+    st.markdown(
+        "**Use Your Own Key** <span class='feature-badge'>Optional</span>", 
+        unsafe_allow_html=True
+    )
+    manual_key = st.text_input(
+        "Groq API Key", 
+        type="password", 
+        placeholder="gsk_...",
+        label_visibility="collapsed"
+    )
+    
+    if manual_key:
+        # THE FIX: Strip whitespace and validate format
+        cleaned_key = manual_key.strip()
+        if cleaned_key.startswith("gsk_") and len(cleaned_key) > 20:
+            active_key = cleaned_key
+            st.success(f"✅ Using: `{cleaned_key[:6]}...{cleaned_key[-4:]}`")
+        else:
+            st.error("❌ Invalid key format. Must start with 'gsk_'")
+            active_key = None
+    
+    # Boot or reboot pipeline if key changed
+    if active_key and active_key != st.session_state.active_key:
+        with st.spinner("Booting SAGE Engine..."):
+            try:
+                st.session_state.pipeline = boot_sage(active_key)
+                st.session_state.active_key = active_key
+                st.success("🟢 Engine Online")
+            except Exception as e:
+                st.error(f"Boot failed: {e}")
+                st.session_state.pipeline = None
     
     st.divider()
     
-    # --- Model Selection ---
-    st.markdown("#### ⚙️ Engine Settings")
-    model = st.selectbox(
-        "Model Core",
-        ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"],
-        index=0
-    )
+    # --- Capabilities ---
+    st.markdown("#### ⚡ Active Capabilities")
+    st.markdown("""
+    - 🧠 **Text Analysis** — Research, Explain, Debug
+    - 🌐 **Web Reading** — Paste any URL
+    - 📋 **Copy Output** — One-click clipboard
+    - 🔀 **Smart Routing** — Auto-selects best agent
+    """)
+    
+    st.divider()
+    
+    # --- Coming Soon ---
+    st.markdown("#### 🔮 Coming Soon")
+    st.markdown("""
+    - 👁️ Computer Vision
+    - 🔊 Audio Responses
+    - 🎬 Video Generation
+    - 🔌 Platform Connections
+    """)
     
     st.divider()
     
     # --- Session Controls ---
-    if st.button("🗑️ Clear Chat History", use_container_width=True):
-        st.session_state.history = []
-        st.rerun()
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🗑️ Clear", use_container_width=True):
+            st.session_state.history = []
+            st.rerun()
+    with col2:
+        if st.button("🔄 Reboot", use_container_width=True):
+            st.session_state.pipeline = None
+            st.session_state.active_key = None
+            st.rerun()
     
     # --- Stats ---
     if st.session_state.history:
+        st.divider()
         st.markdown("#### 📊 Session Stats")
         total = len(st.session_state.history)
         successful = sum(1 for h in st.session_state.history if h.get("success"))
-        st.metric("Total Queries", total)
-        st.metric("Successful", successful)
+        
+        stat1, stat2 = st.columns(2)
+        stat1.metric("Queries", total)
+        stat2.metric("Success", f"{(successful/total*100):.0f}%")
 
 
 # ==========================================
 # MAIN INTERFACE
 # ==========================================
 
-# Header
 st.markdown("""
 <div class="sage-header">
     <h1>🧠 SAGE</h1>
@@ -195,26 +254,38 @@ st.markdown("""
 st.divider()
 
 # --- Gate Check ---
-if not st.session_state.system_ready:
-    st.warning("⚠️ SAGE is offline. Please configure your API key in the sidebar.")
+if not st.session_state.pipeline:
+    st.info("👈 Please configure your API key in the sidebar to start.")
+    
+    # Quick start guide
+    with st.expander("🚀 Quick Start Guide"):
+        st.markdown("""
+        1. Get a free API key at [console.groq.com](https://console.groq.com)
+        2. Paste it in the sidebar under **"Use Your Own Key"**
+        3. Start asking SAGE anything!
+        
+        **Try these examples:**
+        - `"Explain how DNS works"`
+        - `"Debug this Python error: ModuleNotFoundError"`
+        - `"Analyze https://example.com"`
+        - `"Write a short poem about coding"`
+        """)
     st.stop()
 
-# --- Boot Pipeline ---
-pipeline = boot_sage(Settings.GROQ_API_KEY)
-
-# --- Chat History Display ---
+# --- Chat History ---
 chat_container = st.container()
 
 with chat_container:
-    for exchange in st.session_state.history:
+    for idx, exchange in enumerate(st.session_state.history):
         # User message
         st.chat_message("user").write(exchange["user"])
         
         # SAGE response
         with st.chat_message("assistant", avatar="🧠"):
-            # Intent metadata tags
             if exchange.get("success"):
                 intent_data = exchange.get("intent_data", {})
+                
+                # Intent metadata tags
                 tags_html = f"""
                 <div style="margin-bottom: 0.5rem;">
                     <span class="intent-tag tag-type">🏷️ {intent_data.get('task_type', 'N/A')}</span>
@@ -226,31 +297,29 @@ with chat_container:
                 """
                 st.markdown(tags_html, unsafe_allow_html=True)
             
-            # Response text
+            # Response content
             st.markdown(exchange["response"])
+            
+            # COPY BUTTON (using st.code for built-in copy)
+            if exchange.get("success"):
+                with st.expander("📋 Copy Raw Response"):
+                    st.code(exchange["response"], language=None)
 
 
 # --- Input Area ---
-prompt = st.chat_input("Ask SAGE anything...")
+prompt = st.chat_input("Ask SAGE anything... (paste URLs to analyze web pages)")
 
 if prompt:
-    # Show user message immediately
     st.chat_message("user").write(prompt)
     
-    # Process through pipeline
     with st.chat_message("assistant", avatar="🧠"):
-        with st.spinner("Processing through SAGE Pipeline..."):
+        with st.spinner("⚡ Processing through SAGE Pipeline..."):
             
-            # Show live pipeline stages
-            stage_placeholder = st.empty()
-            
-            # Execute the full pipeline
-            result = pipeline.process(prompt)
+            result = st.session_state.pipeline.process(prompt)
             
             if result["success"]:
                 intent = result["intent"]
                 
-                # Build metadata
                 intent_data = {
                     "task_type": intent.task_type.name,
                     "domain": intent.target_domain,
@@ -274,6 +343,10 @@ if prompt:
                 # Display response
                 st.markdown(result["response"])
                 
+                # Copy button
+                with st.expander("📋 Copy Raw Response"):
+                    st.code(result["response"], language=None)
+                
                 # Save to history
                 st.session_state.history.append({
                     "user": prompt,
@@ -284,7 +357,6 @@ if prompt:
             else:
                 error_msg = f"⚠️ {result['response']}"
                 st.error(error_msg)
-                
                 st.session_state.history.append({
                     "user": prompt,
                     "response": error_msg,
