@@ -1,82 +1,61 @@
+"""
+services/audio_service.py
+OWNS: Speech-to-Text (Whisper) + Text-to-Speech (gTTS)
+EXPOSES: transcribe(), synthesize()
+FORBIDDEN: UI, routing
+"""
 import io
+import re
 from groq import Groq
 from gtts import gTTS
 from config.settings import Settings
 
-
 class AudioService:
-    """
-    OWNS: All audio transformations (Speech-to-Text, Text-to-Speech).
-    EXPOSES: transcribe() and synthesize() methods.
-    FORBIDDEN: Must never classify intents, route agents, or render UI.
-    """
-    
     def __init__(self, api_key: str):
-        self.client = Groq(api_key=api_key)
-    
+        self.client = Groq(api_key=api_key.strip())
+
     def transcribe(self, audio_bytes: bytes, filename: str = "recording.wav") -> str:
-        """
-        Speech-to-Text using Groq's Whisper model.
-        
-        Takes: Raw audio bytes from microphone
-        Returns: Transcribed text string
-        """
-        print("🎤 [AudioService] Transcribing speech...")
-        
+        print("🎤 [AudioService] Transcribing...")
+        if not audio_bytes:
+            raise ValueError("No audio bytes provided")
         try:
-            transcription = self.client.audio.transcriptions.create(
+            # Groq expects file tuple (filename, bytes)
+            result = self.client.audio.transcriptions.create(
                 file=(filename, audio_bytes),
                 model=Settings.WHISPER_MODEL,
-                language="en"
+                language="en",
+                response_format="text"
             )
-            
-            text = transcription.text.strip()
-            print(f"🎤 [AudioService] Transcribed: \"{text[:50]}...\"")
+            # Handle both string and object response
+            if isinstance(result, str):
+                text = result
+            else:
+                text = getattr(result, 'text', str(result))
+            text = text.strip()
+            print(f"🎤 Transcribed: \"{text[:80]}...\"")
             return text
-            
         except Exception as e:
-            print(f"❌ [AudioService] Transcription failed: {e}")
-            raise RuntimeError(f"Speech-to-Text failed: {e}")
-    
+            raise RuntimeError(f"STT failed: {e}")
+
     def synthesize(self, text: str, language: str = None) -> bytes:
-        """
-        Text-to-Speech using Google TTS (free, no API key needed).
-        
-        Takes: Text string to speak
-        Returns: MP3 audio bytes ready for playback
-        """
-        if not language:
-            language = Settings.TTS_LANGUAGE
-        
-        print("🔊 [AudioService] Generating speech...")
-        
+        lang = language or Settings.TTS_LANGUAGE
+        print("🔊 [AudioService] Synthesizing...")
         try:
-            # Clean the text for better speech output
-            # Remove markdown formatting that sounds weird when spoken
-            clean_text = text
-            clean_text = clean_text.replace("**", "")
-            clean_text = clean_text.replace("##", "")
-            clean_text = clean_text.replace("```", "")
-            clean_text = clean_text.replace("`", "")
-            clean_text = clean_text.replace("---", "")
-            clean_text = clean_text.replace("*", "")
+            # Strip markdown for cleaner speech
+            clean = re.sub(r'[*#`_\[\]\(\)]', '', text)
+            clean = clean.replace("---", " ").replace("**", "")
+            clean = re.sub(r'\s+', ' ', clean).strip()
+            if len(clean) > 3000:
+                clean = clean[:3000] + "... truncated for audio."
+            if not clean:
+                clean = "No speech content available."
             
-            # Limit length (gTTS has practical limits for speed)
-            if len(clean_text) > 3000:
-                clean_text = clean_text[:3000] + "... Response truncated for audio."
-            
-            # Generate speech
-            tts = gTTS(text=clean_text, lang=language, slow=False)
-            
-            # Write to memory buffer (not disk)
-            audio_buffer = io.BytesIO()
-            tts.write_to_fp(audio_buffer)
-            audio_buffer.seek(0)
-            
-            audio_bytes = audio_buffer.read()
-            print(f"🔊 [AudioService] Generated {len(audio_bytes)} bytes of audio.")
-            return audio_bytes
-            
+            tts = gTTS(text=clean, lang=lang, slow=False)
+            buf = io.BytesIO()
+            tts.write_to_fp(buf)
+            buf.seek(0)
+            audio = buf.read()
+            print(f"🔊 Generated {len(audio)} bytes")
+            return audio
         except Exception as e:
-            print(f"❌ [AudioService] Speech synthesis failed: {e}")
-            raise RuntimeError(f"Text-to-Speech failed: {e}")
+            raise RuntimeError(f"TTS failed: {e}")

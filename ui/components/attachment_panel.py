@@ -1,107 +1,82 @@
 """
-OWNS: File upload (images) and voice recording UI.
-EXPOSES: render_attachments()
-FORBIDDEN: Must never process files through the pipeline.
+ui/components/attachment_panel.py
+OWNS: Image upload + voice recording widgets
+EXPOSES: render_attachment_panel()
+FORBIDDEN: Pipeline execution
 """
-
-import base64
 import streamlit as st
-from ui.state import add_to_history
+import base64
+from config.settings import Settings
 
-
-def render_attachments():
-    """Renders the image upload and voice input widgets."""
-    
-    _render_image_upload()
-    st.markdown("---")
-    _render_voice_input()
-
-
-def _render_image_upload():
-    """Image file uploader with preview."""
-    st.markdown(
-        '<div class="nav-title">📎 ATTACHMENTS</div>', 
-        unsafe_allow_html=True
-    )
-    
-    uploaded = st.file_uploader(
-        "Upload Image",
-        type=["jpg", "jpeg", "png", "webp", "gif"],
-        key="image_uploader",
-        label_visibility="collapsed"
-    )
-    
-    if uploaded:
-        st.image(uploaded, use_container_width=True)
-        
-        bytes_data = uploaded.read()
-        b64 = base64.b64encode(bytes_data).decode("utf-8")
-        
-        name = uploaded.name.lower()
+def _image_to_base64(uploaded_file):
+    try:
+        bytes_data = uploaded_file.getvalue()
+        # Check size
+        size_mb = len(bytes_data) / (1024*1024)
+        if size_mb > Settings.MAX_IMAGE_SIZE_MB:
+            st.error(f"Image too large: {size_mb:.1f}MB > {Settings.MAX_IMAGE_SIZE_MB}MB")
+            return None
+        b64 = base64.b64encode(bytes_data).decode('utf-8')
+        # Determine type
+        name = uploaded_file.name.lower()
         if name.endswith(".png"):
             img_type = "png"
+        elif name.endswith((".jpg",".jpeg")):
+            img_type = "jpeg"
         elif name.endswith(".webp"):
             img_type = "webp"
-        elif name.endswith(".gif"):
-            img_type = "gif"
         else:
             img_type = "jpeg"
-        
-        st.session_state.pending_image = {
-            "image_base64": b64,
-            "image_type": img_type
-        }
-        st.success(f"📎 {uploaded.name}")
-    else:
-        st.session_state.pending_image = None
+        return b64, img_type, bytes_data
+    except Exception as e:
+        st.error(f"Image processing failed: {e}")
+        return None
 
-
-def _render_voice_input():
-    """Microphone recording widget."""
-    st.markdown(
-        '<div class="nav-title">🎤 VOICE INPUT</div>', 
-        unsafe_allow_html=True
-    )
-    
-    audio_input = st.audio_input(
-        "Record",
-        key="voice_input",
+def render_attachment_panel():
+    # This renders compact upload UI for vision and voice
+    # Image upload
+    st.markdown('<div class="sage-status-header">📎 Upload Image for Analysis</div>', unsafe_allow_html=True)
+    uploaded = st.file_uploader(
+        "Upload Image",
+        type=["png","jpg","jpeg","webp"],
+        key="img_uploader",
         label_visibility="collapsed"
     )
-    
-    if audio_input and st.session_state.audio_service:
-        with st.spinner("🎤 Transcribing..."):
-            try:
-                audio_bytes = audio_input.read()
-                transcribed = st.session_state.audio_service.transcribe(audio_bytes)
-                st.info(f'🎤 "{transcribed}"')
-                
-                # Process through pipeline
-                attachments = st.session_state.pending_image or {}
-                result = st.session_state.pipeline.process(transcribed, attachments)
-                
-                intent_data = {}
-                if result["success"]:
-                    intent = result["intent"]
-                    intent_data = {
-                        "task_type": intent.task_type.name,
-                        "domain": intent.target_domain,
-                        "agent": result["agent"],
-                        "confidence": f"{intent.confidence_score:.0%}",
-                        "status": intent.status.name,
-                        "priority": intent.priority.name,
-                        "output_format": intent.output_format.name
-                    }
-                
-                add_to_history({
-                    "user": f"🎤 *{transcribed}*",
-                    "response": result["response"],
-                    "intent_data": intent_data,
-                    "success": result["success"]
-                })
-                
-                st.session_state.pending_image = None
-                st.rerun()
-                
-            except Exception as e:
-                st.error(f"Failed: {e}")
+
+    if uploaded:
+        result = _image_to_base64(uploaded)
+        if result:
+            b64, img_type, raw_bytes = result
+            st.session_state.uploaded_image = uploaded
+            st.session_state.uploaded_image_b64 = b64
+            st.session_state.uploaded_image_type = img_type
+            st.session_state.uploaded_image_name = uploaded.name
+
+            # Preview
+            st.image(uploaded, width=200)
+            st.success(f"✅ image attached ({img_type.upper()}) — ready for VisionWorker")
+        else:
+            st.session_state.uploaded_image = None
+            st.session_state.uploaded_image_b64 = None
+
+    # Voice recording - using audio_input (Streamlit 1.35+)
+    st.markdown('<div class="sage-status-header" style="margin-top:16px;">🎤 Record Voice Message</div>', unsafe_allow_html=True)
+    audio_val = st.audio_input("Record", key="voice_recorder", label_visibility="collapsed")
+
+    if audio_val:
+        try:
+            audio_bytes = audio_val.getvalue()
+            if len(audio_bytes) > 0:
+                st.session_state.voice_audio_bytes = audio_bytes
+                st.audio(audio_bytes, format="audio/wav")
+                st.info("🎤 Voice captured — will be transcribed on send if you enable voice in composer.")
+        except Exception as e:
+            st.error(f"Voice capture failed: {e}")
+
+    # Show attachment status if exists
+    if st.session_state.get("uploaded_image_b64"):
+        st.markdown(f"""
+        <div style="margin-top:10px; background: rgba(63,185,80,0.1); border:1px solid rgba(63,185,80,0.2); border-radius:8px; padding:8px 12px; font-size:11px; color:#3fb950;">
+            ✅ {st.session_state.uploaded_image_name} attached — {len(st.session_state.uploaded_image_b64)//1024}KB base64
+        </div>
+        """, unsafe_allow_html=True)

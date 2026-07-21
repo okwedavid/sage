@@ -1,175 +1,123 @@
 """
-OWNS: The left sidebar — navigation, config, status, profile.
+ui/components/sidebar.py
+OWNS: Left navigation panel
 EXPOSES: render_sidebar()
-FORBIDDEN: Must never process intents or call AI models.
+FORBIDDEN: Pipeline execution
 """
-
 import streamlit as st
 from config.settings import Settings
-from ui.state import (
-    is_online, get_uptime, get_masked_key, 
-    get_session_stats, clear_history, full_reboot
-)
-from ui.boot import attempt_boot
-from ui.styles.palette import Palette as P
-
+from ui.state import clear_conversation, reboot_engine
 
 def render_sidebar():
-    """Renders the complete left sidebar."""
-    
-    with st.sidebar:
-        _render_logo()
-        st.divider()
-        _render_api_config()
-        st.divider()
-        _render_system_status()
-        st.divider()
-        _render_settings()
-        st.divider()
-        _render_session_controls()
-        
-        if st.session_state.history:
-            st.divider()
-            _render_stats()
-        
-        st.divider()
-        _render_user_profile()
+    # Sidebar container via st.markdown for custom styling
+    # Use streamlit columns? We'll build with markdown + streamlit widgets where needed.
 
+    # We will render inside the left column (passed from workspace)
+    # This function expects to be called within a column context.
 
-def _render_logo():
-    """SAGE branding block."""
-    st.markdown(f"""
-    <div style="text-align:center; padding: 0.3rem 0;">
-        <img src="https://em-content.zobj.net/source/apple/391/brain_1f9e0.png" width="55">
-        <h2 style="margin:0; font-weight:800; color:{P.TEXT_PRIMARY};">SAGE</h2>
-        <p style="color:{P.TEXT_SECONDARY}; font-size:0.7rem; margin:0;">
-            v{Settings.APP_VERSION} • {Settings.APP_TAGLINE}
-        </p>
+    st.markdown("""
+    <div class="sage-sidebar-inner">
+        <div class="sage-logo">
+            <div class="sage-logo-icon">🧠</div>
+            <div>
+                <div class="sage-logo-text">SAGE</div>
+                <div class="sage-logo-sub">Systemic Agentic General Engine</div>
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
+    # New Conversation button
+    if st.button("✦ New Conversation  +", key="new_conv", use_container_width=True):
+        clear_conversation()
+        st.rerun()
 
-def _render_api_config():
-    """API key input and boot logic."""
-    st.markdown(
-        '<div class="nav-title">🔑 API CONFIGURATION</div>', 
-        unsafe_allow_html=True
-    )
-    
-    # Check server-side key first
-    env_key = Settings.GROQ_API_KEY
-    active_key = env_key.strip() if env_key else None
-    
-    # Manual override input
-    manual_key = st.text_input(
-        "API Key",
-        type="password",
-        placeholder="gsk_... (paste your key)",
-        label_visibility="collapsed"
-    )
-    
-    if manual_key:
-        cleaned = manual_key.strip()
-        if cleaned.startswith("gsk_") and len(cleaned) > 20:
-            active_key = cleaned
+    # Navigation
+    nav_items = [
+        ("📊", "Dashboard", False),
+        ("💬", "Conversations", True),
+        ("🤖", "Agents", False),
+        ("🧠", "Memory", False),
+        ("🛠️", "Tools", False),
+        ("⚙️", "Settings", False),
+    ]
+    for icon, label, active in nav_items:
+        # Using button for interaction but styled via CSS
+        btn_label = f"{icon}  {label}"
+        # mark active
+        if active:
+            st.markdown(f'<div class="sage-nav-button active">{btn_label}</div>', unsafe_allow_html=True)
         else:
-            st.error("Invalid format. Must start with 'gsk_'")
-            active_key = None
+            if st.button(btn_label, key=f"nav_{label}", use_container_width=True):
+                st.toast(f"{label} — Coming in next sprint")
+
+    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+
+    # API Configuration
+    st.markdown('<div class="sage-status-header">🔑 API Configuration</div>', unsafe_allow_html=True)
     
-    # Boot engine if key changed
-    if active_key and active_key != st.session_state.active_key:
-        with st.spinner("Booting SAGE..."):
-            if attempt_boot(active_key):
-                st.success("🟢 Online")
+    # Show if server key exists
+    if Settings.GROQ_API_KEY:
+        st.success(f"Using: `{Settings.get_masked_key()}`")
+    else:
+        st.warning("No server key found.")
 
-
-def _render_system_status():
-    """System health dashboard."""
-    st.markdown(
-        '<div class="nav-title">🖥️ SYSTEM STATUS</div>', 
-        unsafe_allow_html=True
+    # Custom key input
+    api_key_input = st.text_input(
+        "Use Your Own Key (Optional)",
+        type="password",
+        placeholder="gsk_...",
+        value=st.session_state.get("api_key", ""),
+        key="sidebar_api_input",
+        label_visibility="visible"
     )
-    
-    online = is_online()
-    status_class = "status-online" if online else "status-offline"
-    status_text = "Online" if online else "Offline"
-    
+    if api_key_input and api_key_input.strip().startswith("gsk_"):
+        if api_key_input.strip() != st.session_state.get("api_key", ""):
+            st.session_state.api_key = api_key_input.strip()
+            reboot_engine()
+            st.toast("API Key updated, rebooting engine...")
+
+    # Engine status
     st.markdown(f"""
-    <div class="nav-section">
-        <div class="status-grid">
-            <span class="status-label">Engine</span>
-            <span class="status-value {status_class}">{status_text}</span>
-            <span class="status-label">Model</span>
-            <span class="status-value" style="font-size:0.6rem;">
-                {Settings.DEFAULT_MODEL}
-            </span>
-            <span class="status-label">Uptime</span>
-            <span class="status-value">{get_uptime()}</span>
-            <span class="status-label">API Key</span>
-            <span class="status-value" style="font-size:0.58rem;">
-                {get_masked_key()}
-            </span>
-        </div>
+    <div class="sage-system-status">
+        <div class="sage-status-header">System Status</div>
+        <div class="sage-status-row"><span class="sage-status-label">Engine Status</span><span class="sage-status-value online">● Online</span></div>
+        <div class="sage-status-row"><span class="sage-status-label">Active Model</span><span class="sage-status-value">{Settings.DEFAULT_MODEL}</span></div>
+        <div class="sage-status-row"><span class="sage-status-label">Version</span><span class="sage-status-value">SAGE v{Settings.APP_VERSION}</span></div>
     </div>
     """, unsafe_allow_html=True)
 
+    # Audio settings toggle
+    st.markdown('<div class="sage-status-header" style="margin-top:16px;">🎧 Audio Settings</div>', unsafe_allow_html=True)
+    tts_toggle = st.toggle("Enable Voice Responses", value=st.session_state.get("tts_enabled", False), key="tts_toggle")
+    st.session_state.tts_enabled = tts_toggle
 
-def _render_settings():
-    """User-configurable settings."""
-    st.markdown(
-        '<div class="nav-title">⚙️ SETTINGS</div>', 
-        unsafe_allow_html=True
-    )
-    st.session_state.tts_enabled = st.toggle(
-        "🔊 Voice Responses", 
-        value=st.session_state.tts_enabled
-    )
-
-
-def _render_session_controls():
-    """Clear and Reboot buttons."""
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🗑️ Clear", use_container_width=True):
-            clear_history()
-            st.rerun()
-    with col2:
-        if st.button("🔄 Reboot", use_container_width=True):
-            full_reboot()
-            st.rerun()
-
-
-def _render_stats():
-    """Session statistics."""
-    st.markdown(
-        '<div class="nav-title">📊 SESSION STATS</div>', 
-        unsafe_allow_html=True
-    )
-    stats = get_session_stats()
-    
-    st.markdown(f"""
-    <div class="nav-section">
-        <div class="status-grid">
-            <span class="status-label">Queries</span>
-            <span class="status-value">{stats["total"]}</span>
-            <span class="status-label">Successful</span>
-            <span class="status-value">{stats["successful"]}</span>
-            <span class="status-label">Success Rate</span>
-            <span class="status-value status-online">{stats["rate"]}</span>
-        </div>
+    # Active capabilities
+    st.markdown("""
+    <div style="margin-top:16px;" class="sage-status-header">⚡ Active Capabilities</div>
+    <div style="font-size:11px; color:#a1a1aa; line-height:1.8;">
+        • <span style="color:#e4e4e7;">Text Analysis</span> — Research, Explain, Debug<br/>
+        • <span style="color:#e4e4e7;">Web Reading</span> — Paste any URL<br/>
+        • <span style="color:#e4e4e7;">Computer Vision</span> — Upload images<br/>
+        • <span style="color:#e4e4e7;">Voice Input</span> — Speak your query<br/>
+        • <span style="color:#e4e4e7;">Voice Output</span> — Listen to responses<br/>
+        • <span style="color:#e4e4e7;">Copy Output</span> — One-click clipboard
     </div>
     """, unsafe_allow_html=True)
 
-
-def _render_user_profile():
-    """User identity badge."""
-    st.markdown(f"""
-    <div class="user-profile">
-        <div class="user-avatar">G</div>
-        <div>
-            <div class="user-name">gamp</div>
-            <div class="user-role">Beginner Builder</div>
+    st.markdown("""
+    <div class="sage-profile" style="margin-top:24px;">
+        <div class="sage-avatar">g</div>
+        <div class="sage-profile-info">
+            <div class="sage-profile-name">gamp</div>
+            <div class="sage-profile-role">Beginner Builder</div>
         </div>
-        <span class="pro-badge">PRO</span>
+        <div class="sage-pro-badge">PRO</div>
     </div>
     """, unsafe_allow_html=True)
+
+    st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
+    if st.button("🔄 Reboot Engine", key="reboot", use_container_width=True):
+        reboot_engine()
+        st.toast("Engine rebooted")
+        st.rerun()

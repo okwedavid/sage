@@ -1,86 +1,67 @@
 """
-OWNS: Rendering a single SAGE response with action bar.
-EXPOSES: render_response()
-FORBIDDEN: Must never call the pipeline or modify history.
+ui/components/response_card.py
+OWNS: Response body + action bar (Copy, Listen, Save)
+EXPOSES: render_response_card()
+FORBIDDEN: Pipeline logic
 """
-
 import streamlit as st
+from ui.boot import ensure_engine
 
+def render_response_card(content: str, agent: str = "GeneralWorker", intent=None):
+    if not content:
+        return
 
-def render_response(exchange: dict, index: int):
+    # Header
+    timestamp = ""
+    if intent:
+        # try get from dict
+        if isinstance(intent, dict):
+            timestamp = intent.get("created_at", "")[:16] if intent.get("created_at") else ""
+    # Clean timestamp
+    ts_display = ""
+
+    header_html = f"""
+    <div class="sage-response-card">
+        <div class="sage-response-header">
+            <span>📄 {agent} Intelligence Report</span>
+            <span style="color:#71717a;">{ts_display}</span>
+        </div>
+        <div class="sage-response-body">
     """
-    Renders a complete SAGE response block inside a chat_message context.
-    
-    Includes:
-        - Intent metadata table (if successful)
-        - Response text (markdown)
-        - Action bar: Copy | Listen | Save
-    
-    Args:
-        exchange: A history entry dict
-        index: The position in history (for unique widget keys)
-    """
-    from ui.components.intent_card import render_intent_table
-    
-    # --- Intent Table ---
-    if exchange.get("success") and exchange.get("intent_data"):
-        idata = exchange["intent_data"]
-        # Backward compatibility
-        idata.setdefault("output_format", "MARKDOWN")
-        idata.setdefault("priority", "NORMAL")
-        
-        st.markdown("**✅ Intent Recognized**")
-        render_intent_table(idata)
-    
-    # --- Response Body ---
-    st.markdown(exchange["response"])
-    
-    # --- Action Bar ---
-    if exchange.get("success"):
-        _render_action_bar(exchange, index)
+    st.markdown(header_html, unsafe_allow_html=True)
 
+    # Body - use streamlit markdown for proper rendering
+    st.markdown(content)
 
-def _render_action_bar(exchange: dict, index: int):
-    """The Copy | Listen | Save row beneath each response."""
-    
-    col_copy, col_listen, col_save, col_spacer = st.columns([1, 1, 1, 4])
-    
-    # COPY — Uses st.code which has a built-in copy icon
-    with col_copy:
-        if st.button("📋 Copy", key=f"copy_{index}", use_container_width=True):
-            # Toggle: show/hide the code block
-            key = f"show_copy_{index}"
-            st.session_state[key] = not st.session_state.get(key, False)
-    
-    # Show copyable text block if toggled
-    if st.session_state.get(f"show_copy_{index}", False):
-        st.code(exchange["response"], language=None)
-    
-    # LISTEN — Text-to-Speech
-    with col_listen:
-        if st.session_state.get("tts_enabled", False):
-            audio_cache = f"audio_{index}"
-            
-            if audio_cache not in st.session_state:
-                if st.button("🔊 Listen", key=f"listen_{index}", use_container_width=True):
-                    try:
-                        audio_svc = st.session_state.audio_service
-                        if audio_svc:
-                            audio_bytes = audio_svc.synthesize(exchange["response"])
-                            st.session_state[audio_cache] = audio_bytes
-                            st.rerun()
-                    except Exception as e:
-                        st.error(f"TTS: {e}")
+    st.markdown("</div>", unsafe_allow_html=True)  # close body
+
+    # Action bar using columns
+    col1, col2, col3, col4 = st.columns([1,1,1,6])
+    with col1:
+        if st.button("📋 Copy", key=f"copy_{hash(content)%100000}", use_container_width=False):
+            st.code(content, language="markdown")
+            st.toast("Copied! Use expander to copy.")
+    with col2:
+        # Listen button
+        if st.button("🔊 Listen", key=f"listen_{hash(content)%100000}"):
+            # Ensure audio service
+            _, _, audio_service = ensure_engine()
+            if audio_service:
+                try:
+                    audio_bytes = audio_service.synthesize(content)
+                    st.audio(audio_bytes, format="audio/mp3", autoplay=True)
+                except Exception as e:
+                    st.error(f"TTS failed: {e}")
             else:
-                st.audio(st.session_state[audio_cache], format="audio/mp3")
-    
-    # SAVE — Download as markdown
-    with col_save:
-        st.download_button(
-            "⬇️ Save",
-            data=exchange["response"],
-            file_name=f"sage_response_{index}.md",
-            mime="text/markdown",
-            key=f"dl_{index}",
-            use_container_width=True
-        )
+                st.warning("Audio service unavailable. Check API key.")
+    with col3:
+        # Save
+        st.download_button("💾 Save", data=content, file_name=f"sage_report_{agent}.md", mime="text/markdown", key=f"save_{hash(content)%100000}")
+
+    # Close card
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
+
+def render_response_card_compact(content: str):
+    """Simpler version for chat history"""
+    st.markdown(content)

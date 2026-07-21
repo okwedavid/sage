@@ -1,61 +1,51 @@
-import json
-import os
+"""
+agents/general_worker.py
+OWNS: Text-based LLM worker (Groq)
+EXPOSES: execute()
+FORBIDDEN: Routing, validation
+"""
 from groq import Groq
-# Import the Base Class we just made above
 from agents.base_worker import BaseWorker
-# Import Data structures from Core
 from core.intent.schemas import IntentSchema
 from core.intent.enums import TaskType
+from config.settings import Settings
 
 class GeneralWorker(BaseWorker):
-    """
-    This agent handles heavy lifting.
-    It changes its behavior dynamically based on the TaskType given to it.
-    """
-    
-    # We initialize with the API key
     def __init__(self, api_key: str):
-        self.client = Groq(api_key=api_key)
+        self.client = Groq(api_key=api_key.strip())
 
     def execute(self, intent: IntentSchema) -> str:
+        print(f"🔨 [GeneralWorker] {intent.task_type.name}")
         
-        print(f"🔨 [Agent] Executing {intent.task_type.name} task...")
-        
-        # --- DYNAMIC PERSONALITY SWITCHING ---
-        # We look up what kind of expert we need to be based on the ENUM
-        
-        system_instructions = {
-            TaskType.RESEARCH: "You are a deep researcher. Provide structured, factual reports.",
-            TaskType.EXPLAIN: "You are an expert teacher. Explain clearly.",
-            TaskType.DEBUG: "You are a senior python developer. Diagnose errors and provide corrected code blocks.",
-            TaskType.GENERATE: "You are a creative writer. Generate high-quality text.",
-            TaskType.ANALYZE: "You are a critical analyst. Break down pros/cons."
+        roles = {
+            TaskType.RESEARCH: "You are SAGE, a deep researcher. Provide structured, factual reports with clear sections, key concepts, and insights. Use markdown formatting.",
+            TaskType.EXPLAIN: "You are SAGE, an expert teacher. Explain clearly with examples, analogies, and structured breakdowns. Use markdown.",
+            TaskType.DEBUG: "You are SAGE, a senior developer. Diagnose errors and provide corrected code with explanations.",
+            TaskType.GENERATE: "You are SAGE, a creative writer. Generate high-quality, engaging text.",
+            TaskType.ANALYZE: "You are SAGE, a critical analyst. Break down pros/cons, patterns, and insights. Be structured.",
+            TaskType.SUMMARIZE: "You are SAGE, a summarization expert. Be concise, complete, and well-structured.",
+            TaskType.BUILD: "You are SAGE, a software engineer. Write clean, production-quality code with comments.",
+            TaskType.PLAN: "You are SAGE, a strategic planner. Create actionable step-by-step plans with milestones.",
+            TaskType.TRANSLATE: "You are SAGE, a professional translator. Preserve meaning and tone.",
+            TaskType.REVIEW: "You are SAGE — Systemic Agentic General Engine, a helpful cognitive assistant. Respond naturally and helpfully. You are not a chatbot wrapper, you are an agentic OS.",
         }
-        
-        # Get the personality instruction, defaulting to helper if unknown
-        role = system_instructions.get(intent.task_type, "You are a helpful assistant.")
+        role = roles.get(intent.task_type, "You are SAGE, a helpful cognitive assistant.")
+
+        # Build context-aware prompt
+        user_prompt = f"Domain: {intent.target_domain}\nGoal: {intent.goal}\n\nRequest: {intent.input_text}"
+        if intent.context:
+            user_prompt += f"\n\nContext: {intent.context}"
         
         try:
             response = self.client.chat.completions.create(
-                model="llama-3.3-70b-versatile", 
+                model=Settings.DEFAULT_MODEL,
                 messages=[
                     {"role": "system", "content": role},
-                    {
-                        "role": "user", 
-                        "content": f"""
-                        Domain Context: {intent.target_domain}
-                        
-                        User Request: {intent.input_text}
-                        
-                        Please perform the {intent.task_type.value} task requested.
-                        """
-                    }
+                    {"role": "user", "content": user_prompt}
                 ],
                 temperature=0.7,
-                max_tokens=1024
+                max_tokens=Settings.MAX_TOKENS
             )
-            
             return response.choices[0].message.content
-            
         except Exception as e:
-            return f"[WORKER ERROR] Agent failed execution: {e}"
+            return f"❌ [GeneralWorker ERROR] {e}"

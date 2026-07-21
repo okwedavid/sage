@@ -1,54 +1,32 @@
 """
-SAGE — Systemic Agentic General Engine
-=======================================
-
-This is the application entry point.
-It orchestrates the UI framework without containing any business logic.
-
-Architecture:
-    app.py (this file)
-        ├── ui/styles/     → Visual theming
-        ├── ui/state.py    → Session management
-        ├── ui/boot.py     → Engine initialization
-        ├── ui/components/ → Individual UI modules
-        └── ui/layouts/    → Page compositions
-
-Run:
-    streamlit run app.py
+app.py — SAGE Web UI Entry Point
+OWNS: Pure orchestration (~60 lines)
+EXPOSES: Streamlit app
+FORBIDDEN: Business logic, styling beyond orchestration
 """
-
-import sys
-import os
-
-# Ensure project root is importable
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-# ==========================================
-# STEP 1: Page Configuration (MUST be first)
-# ==========================================
-from ui.styles.theme import apply_page_config
-apply_page_config()
-
-# ==========================================
-# STEP 2: Inject Stylesheet
-# ==========================================
+import streamlit as st
+from ui.styles.theme import apply_theme
 from ui.styles.css import inject_css
+from ui.state import init_state
+from ui.layouts.workspace import render_workspace
+from ui.boot import ensure_engine
+from config.settings import Settings
+
+# 1. Theme & Page Config
+apply_theme()
+
+# 2. Premium CSS Injection
 inject_css()
 
-# ==========================================
-# STEP 3: Initialize Session State
-# ==========================================
-from ui.state import init_state
+# 3. Session State Init
 init_state()
 
-# ==========================================
-# STEP 4: Render Sidebar (Navigation + Config)
-# ==========================================
-from ui.components.sidebar import render_sidebar
-render_sidebar()
+# 4. Engine Boot (auto from .env if available)
+if Settings.GROQ_API_KEY or st.session_state.get("api_key"):
+    try:
+        ensure_engine()
+    except Exception as e:
+        st.sidebar.error(f"Boot warning: {e}")
 
-# ==========================================
-# STEP 5: Render Main Workspace
-# ==========================================
-from ui.layouts.workspace import render_workspace
+# 5. Main Workspace Layout (3-column Mission Control)
 render_workspace()

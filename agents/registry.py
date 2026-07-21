@@ -1,20 +1,18 @@
+"""
+agents/registry.py
+OWNS: Plugin-based agent phone book
+EXPOSES: register_worker(), lookup()
+FORBIDDEN: Executing tasks, LLM calls
+"""
 from core.intent.enums import TaskType, OutputFormat
 
-
 class AgentRegistry:
-    """
-    OWNS: The mapping between Intent properties and available Workers.
-    EXPOSES: lookup() and register_worker() methods.
-    FORBIDDEN: Must never execute tasks or call APIs.
-    """
-    
     def __init__(self):
         self._registry = {
-            # --- TEXT-BASED AGENTS ---
             OutputFormat.TEXT: {"default": "GeneralWorker"},
             OutputFormat.MARKDOWN: {
-                TaskType.RESEARCH: "WebWorker",    # Research tasks check for URLs
-                TaskType.ANALYZE: "WebWorker",     # Analysis tasks check for URLs
+                TaskType.RESEARCH: "WebWorker",
+                TaskType.ANALYZE: "WebWorker",
                 "default": "GeneralWorker"
             },
             OutputFormat.PYTHON: {
@@ -22,8 +20,6 @@ class AgentRegistry:
                 TaskType.DEBUG: "GeneralWorker",
                 "default": "GeneralWorker"
             },
-            
-            # --- FUTURE AGENTS (Stubs) ---
             OutputFormat.IMAGE: {"default": "ImageWorker"},
             OutputFormat.VIDEO: {"default": "VideoWorker"},
             OutputFormat.PDF: {"default": "ReportWorker"},
@@ -37,18 +33,15 @@ class AgentRegistry:
         print(f"   📦 Registered: {name}")
 
     def lookup(self, task_type: TaskType, output_format: OutputFormat):
-        format_registry = self._registry.get(output_format, {})
-        worker_name = format_registry.get(task_type)
-        if not worker_name:
-            worker_name = format_registry.get("default", "GeneralWorker")
+        fmt_reg = self._registry.get(output_format, {})
+        worker_name = fmt_reg.get(task_type) or fmt_reg.get("default", "GeneralWorker")
         worker = self._workers.get(worker_name)
         if not worker:
-            # FALLBACK: If the specific worker doesn't exist, use GeneralWorker
             worker = self._workers.get("GeneralWorker")
             worker_name = "GeneralWorker"
             if not worker:
-                raise RuntimeError(
-                    f"No worker registered. "
-                    f"Available: {list(self._workers.keys())}"
-                )
+                raise RuntimeError(f"No workers available: {list(self._workers.keys())}")
         return worker, worker_name
+
+    def list_workers(self):
+        return list(self._workers.keys())
