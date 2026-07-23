@@ -4,6 +4,7 @@ const nextConfig = {
   images: {
     domains: ['i.pravatar.cc', 'avatars.githubusercontent.com'],
   },
+  output: 'standalone',
 };
 
 module.exports = nextConfig;
