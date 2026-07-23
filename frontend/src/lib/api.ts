@@ -1,0 +1,92 @@
+/**
+ * lib/api.ts — API client for SAGE backend
+ */
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+interface ChatRequest {
+  message: string;
+  attachments?: Record<string, any>;
+}
+
+interface ChatResponse {
+  success: boolean;
+  response: string;
+  agent: string;
+  intent: any;
+  stages: any[];
+  timestamp: string;
+}
+
+async function apiFetch(path: string, options: RequestInit = {}) {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('sage_token') : null;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> || {}),
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Request failed' }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export const api = {
+  // Chat
+  async chat(req: ChatRequest): Promise<ChatResponse> {
+    return apiFetch('/api/chat', { method: 'POST', body: JSON.stringify(req) });
+  },
+
+  async health() {
+    return apiFetch('/api/chat/health');
+  },
+
+  // Auth
+  async login(email: string, password: string) {
+    return apiFetch('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  },
+
+  async register(email: string, password: string, name?: string) {
+    return apiFetch('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, name }),
+    });
+  },
+
+  async demo() {
+    return apiFetch('/api/auth/demo', { method: 'POST' });
+  },
+
+  // Conversations
+  async getConversations() {
+    return apiFetch('/api/conversations');
+  },
+
+  async createConversation(title: string) {
+    return apiFetch('/api/conversations', {
+      method: 'POST',
+      body: JSON.stringify({ title }),
+    });
+  },
+
+  async deleteConversation(id: string) {
+    return apiFetch(`/api/conversations/${id}`, { method: 'DELETE' });
+  },
+
+  // Agents
+  async getAgents() {
+    return apiFetch('/api/agents');
+  },
+
+  async getAgentStatus() {
+    return apiFetch('/api/agents/status');
+  },
+};
