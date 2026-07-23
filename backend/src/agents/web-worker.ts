@@ -11,9 +11,11 @@ import { Settings } from '../config/settings';
 
 export class WebWorker implements BaseWorker {
   private client: Groq;
+  private model: string;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, customModel?: string) {
     this.client = new Groq({ apiKey: apiKey.trim() });
+    this.model = customModel || Settings.DEFAULT_MODEL;
   }
 
   private extractUrls(text: string): string[] {
@@ -66,7 +68,7 @@ export class WebWorker implements BaseWorker {
 
     try {
       const response = await this.client.chat.completions.create({
-        model: Settings.DEFAULT_MODEL,
+        model: this.model,
         messages: [
           {
             role: 'system',
@@ -91,7 +93,7 @@ export class WebWorker implements BaseWorker {
   private async fallback(intent: IntentSchema): Promise<string> {
     try {
       const response = await this.client.chat.completions.create({
-        model: Settings.DEFAULT_MODEL,
+        model: this.model,
         messages: [
           { role: 'system', content: 'You are SAGE research assistant. Provide structured factual reports.' },
           { role: 'user', content: intent.inputText },

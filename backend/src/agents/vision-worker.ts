@@ -30,18 +30,21 @@ export class VisionWorker implements BaseWorker {
       return this.fallback(intent);
     }
 
+    console.log(`📸 Processing image: ${imgName} (type: ${imgType}, size: ~${Math.round(imgB64.length * 0.75 / 1024)}KB)`);
+
     const question =
       !intent.inputText.trim() ||
-      ['[image uploaded]', 'image attached'].includes(intent.inputText.toLowerCase())
+      ['[image attached]', 'image attached', '[image uploaded]'].includes(intent.inputText.toLowerCase())
         ? DEFAULT_VISION_QUESTION
         : intent.inputText;
 
+    // Vision-capable models to try
     const modelsToTry = [
-      Settings.VISION_MODEL,
-      Settings.VISION_FALLBACK,
-      'meta-llama/llama-4-scout-17b-16e-instruct',
-      'llama-3.2-90b-vision-preview',
-    ].filter(Boolean);
+      'llama-3.2-11b-vision-preview',  // Most reliable vision model
+      'llama-3.2-90b-vision-preview',  // Better quality
+      Settings.VISION_MODEL,           // Configured model
+      Settings.VISION_FALLBACK,        // Fallback
+    ].filter(Boolean) as string[];
 
     let lastError: any = null;
 
@@ -64,20 +67,28 @@ export class VisionWorker implements BaseWorker {
         });
 
         const analysis = response.choices[0].message.content || '';
+        console.log(`✅ Vision analysis complete using ${modelId}`);
         return `👁️ **Vision Analysis** — \`${imgName}\` (via \`${modelId}\`)\n\n---\n\n${analysis}`;
       } catch (error: any) {
         lastError = error;
         const errStr = error.message?.toLowerCase() || '';
-        if (errStr.includes('decommissioned') || errStr.includes('not found') || errStr.includes('model')) {
-          console.log(`⚠️ Model ${modelId} failed: ${error.message} — trying next`);
+        console.warn(`⚠️ Model ${modelId} failed: ${error.message}`);
+        
+        // Try next model on specific errors
+        if (errStr.includes('decommissioned') || 
+            errStr.includes('not found') || 
+            errStr.includes('model') ||
+            errStr.includes('not supported')) {
           continue;
         }
+        // Break on other errors (auth, rate limit, etc.)
         break;
       }
     }
 
-    const errMsg = lastError?.message || 'Unknown';
-    return `⚠️ All vision models failed. Last error: ${errMsg}`;
+    const errMsg = lastError?.message || 'Unknown error';
+    console.error(`❌ All vision models failed: ${errMsg}`);
+    return `⚠️ **Vision Analysis Unavailable**\n\nCould not analyze the image. Error: ${errMsg}\n\nPlease try again or describe the image in text for analysis.`;
   }
 
   private async fallback(intent: IntentSchema): Promise<string> {

@@ -42,12 +42,14 @@ export function Composer() {
     setText('');
     setProcessing(true);
 
-    // Build request
+    // Build request with image if present
     const attachments: Record<string, any> = {};
     if (uploadedImage) {
       attachments.image_base64 = uploadedImage.base64;
       attachments.image_type = uploadedImage.type;
       attachments.image_name = uploadedImage.name;
+      
+      console.log(`🖼️ Sending image: ${uploadedImage.name} (${uploadedImage.type})`);
     }
 
     try {
@@ -94,17 +96,42 @@ export function Composer() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image must be less than 5MB');
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
-      const base64 = (reader.result as string).split(',')[1];
+      const result = reader.result as string;
+      const base64 = result.split(',')[1];
+      const type = file.type.split('/')[1] || 'jpeg';
+      
+      console.log(`📎 Image uploaded: ${file.name} (${type}, ${Math.round(file.size / 1024)}KB)`);
+      
       setUploadedImage({
         base64,
-        type: file.type.split('/')[1] || 'jpeg',
+        type,
         name: file.name,
       });
     };
+    reader.onerror = () => {
+      alert('Failed to read image file');
+    };
     reader.readAsDataURL(file);
     setShowAttach(false);
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   return (

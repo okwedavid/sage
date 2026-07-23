@@ -86,6 +86,8 @@ interface AppState {
   toggleTts: () => void;
   apiKey: string;
   setApiKey: (key: string) => void;
+  customModel: string;
+  setCustomModel: (model: string) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -137,4 +139,6 @@ export const useAppStore = create<AppState>((set) => ({
   toggleTts: () => set((s) => ({ ttsEnabled: !s.ttsEnabled })),
   apiKey: '',
   setApiKey: (key) => set({ apiKey: key }),
+  customModel: 'llama-3.3-70b-versatile',
+  setCustomModel: (model) => set({ customModel: model }),
 }));

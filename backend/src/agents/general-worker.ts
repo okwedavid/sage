@@ -24,13 +24,15 @@ const SYSTEM_ROLES: Record<string, string> = {
 
 export class GeneralWorker implements BaseWorker {
   private client: Groq;
+  private model: string;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, customModel?: string) {
     this.client = new Groq({ apiKey: apiKey.trim() });
+    this.model = customModel || Settings.DEFAULT_MODEL;
   }
 
   async execute(intent: IntentSchema): Promise<string> {
-    console.log(`🔨 [GeneralWorker] ${intent.taskType}`);
+    console.log(`🔨 [GeneralWorker] ${intent.taskType} using ${this.model}`);
 
     const role = SYSTEM_ROLES[intent.taskType] || 'You are SAGE, a helpful cognitive assistant.';
 
@@ -41,7 +43,7 @@ export class GeneralWorker implements BaseWorker {
 
     try {
       const response = await this.client.chat.completions.create({
-        model: Settings.DEFAULT_MODEL,
+        model: this.model,
         messages: [
           { role: 'system', content: role },
           { role: 'user', content: userPrompt },

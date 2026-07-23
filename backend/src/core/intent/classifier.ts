@@ -35,12 +35,14 @@ JSON FORMAT:
 
 export class IntentClassifier {
   private client: Groq;
+  private model: string;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, customModel?: string) {
     if (!apiKey?.trim().startsWith('gsk_')) {
       throw new Error('Classifier requires valid Groq API key starting with gsk_');
     }
     this.client = new Groq({ apiKey: apiKey.trim() });
+    this.model = customModel || Settings.DEFAULT_MODEL;
   }
 
   private containsUrl(text: string): boolean {
@@ -50,7 +52,7 @@ export class IntentClassifier {
   async classify(textInput: string): Promise<IntentSchema> {
     try {
       const response = await this.client.chat.completions.create({
-        model: Settings.DEFAULT_MODEL,
+        model: this.model,
         messages: [
           { role: 'system', content: CLASSIFIER_PROMPT },
           { role: 'user', content: `Classify this intent:\n\n${textInput}` },

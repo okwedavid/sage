@@ -32,9 +32,9 @@ export class IntentPipeline {
   private validator: IntentValidator;
   private router: IntentRouter;
 
-  constructor(apiKey: string, registry: AgentRegistry) {
+  constructor(apiKey: string, registry: AgentRegistry, customModel?: string) {
     this.normalizer = new IntentNormalizer();
-    this.classifier = new IntentClassifier(apiKey);
+    this.classifier = new IntentClassifier(apiKey, customModel);
     this.validator = new IntentValidator();
     this.router = new IntentRouter(registry);
     console.log('✅ [Pipeline] All subsystems initialized');

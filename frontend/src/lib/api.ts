@@ -39,7 +39,17 @@ async function apiFetch(path: string, options: RequestInit = {}) {
 export const api = {
   // Chat
   async chat(req: ChatRequest): Promise<ChatResponse> {
-    return apiFetch('/api/chat', { method: 'POST', body: JSON.stringify(req) });
+    // Get custom settings from localStorage
+    const customApiKey = localStorage.getItem('sage_custom_api_key');
+    const customModel = localStorage.getItem('sage_custom_model');
+    
+    const requestBody = {
+      ...req,
+      customApiKey: customApiKey || undefined,
+      customModel: customModel || undefined,
+    };
+    
+    return apiFetch('/api/chat', { method: 'POST', body: JSON.stringify(requestBody) });
   },
 
   async health() {

@@ -11,37 +11,59 @@ import { intentToDict } from '../core/intent/schemas';
 
 const router = Router();
 
-// Pipeline singleton (lazy init)
-let pipeline: IntentPipeline | null = null;
+// Pipeline cache (keyed by config)
+const pipelineCache = new Map<string, IntentPipeline>();
 
-function getPipeline(): IntentPipeline {
-  if (pipeline) return pipeline;
+function getPipeline(apiKey: string, customModel?: string): IntentPipeline {
+  const cacheKey = `${apiKey}:${customModel || 'default'}`;
+  
+  if (pipelineCache.has(cacheKey)) {
+    return pipelineCache.get(cacheKey)!;
+  }
 
-  const apiKey = Settings.GROQ_API_KEY;
   if (!apiKey || !apiKey.startsWith('gsk_')) {
-    throw new Error('GROQ_API_KEY not configured');
+    throw new Error('Invalid Groq API key');
   }
 
   const registry = new AgentRegistry();
-  registry.registerWorker('GeneralWorker', new GeneralWorker(apiKey));
-  registry.registerWorker('WebWorker', new WebWorker(apiKey));
+  registry.registerWorker('GeneralWorker', new GeneralWorker(apiKey, customModel));
+  registry.registerWorker('WebWorker', new WebWorker(apiKey, customModel));
   registry.registerWorker('VisionWorker', new VisionWorker(apiKey));
 
-  pipeline = new IntentPipeline(apiKey, registry);
-  return pipeline;
+  const pipe = new IntentPipeline(apiKey, registry, customModel);
+  pipelineCache.set(cacheKey, pipe);
+  
+  // Limit cache size
+  if (pipelineCache.size > 100) {
+    const firstKey = pipelineCache.keys().next().value;
+    if (firstKey) pipelineCache.delete(firstKey);
+  }
+  
+  return pipe;
 }
 
 // POST /api/chat — process a message through the pipeline
 router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { message, attachments = {} } = req.body;
+    const { message, attachments = {}, customApiKey, customModel } = req.body;
 
     if (!message?.trim() && Object.keys(attachments).length === 0) {
       res.status(400).json({ error: 'Message or attachment required' });
       return;
     }
 
-    const pipe = getPipeline();
+    // Use custom API key if provided, otherwise use server default
+    const apiKey = (customApiKey && customApiKey.startsWith('gsk_')) 
+      ? customApiKey 
+      : Settings.GROQ_API_KEY;
+
+    if (!apiKey || !apiKey.startsWith('gsk_')) {
+      res.status(500).json({ error: 'No valid API key available. Please add your Groq API key in Settings.' });
+      return;
+    }
+
+    // Create pipeline with custom config if needed
+    const pipe = getPipeline(apiKey, customModel);
     const result = await pipe.process(message || '[Image attached] Analyze this image', attachments);
 
     res.json({
