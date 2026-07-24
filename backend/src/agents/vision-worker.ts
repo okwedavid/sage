@@ -57,9 +57,9 @@ export class VisionWorker implements BaseWorker {
             {
               role: 'user',
               content: [
-                { type: 'text', text: question },
-                { type: 'image_url', image_url: { url: `data:image/${imgType};base64,${imgB64}` } },
-              ],
+  { type: "text" as const, text: "..." },
+  { type: "image_url" as const, image_url: { url: "..." } }
+],
             },
           ],
           temperature: 0.3,
