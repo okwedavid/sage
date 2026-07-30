@@ -51,17 +51,26 @@ export class VisionWorker implements BaseWorker {
     for (const modelId of modelsToTry) {
       try {
         console.log(`👁️ Trying vision model: ${modelId}`);
+        
+        // Construct multimodal message for vision models
+        const messages = [
+          {
+            role: 'user' as const,
+            content: [
+              { type: 'text' as const, text: question },
+              { 
+                type: 'image_url' as const, 
+                image_url: { 
+                  url: `data:image/${imgType};base64,${imgB64}` 
+                } 
+              },
+            ],
+          },
+        ];
+
         const response = await this.client.chat.completions.create({
           model: modelId,
-          messages: [
-            {
-              role: 'user',
-              content: [
-  { type: "text" as const, text: "..." },
-  { type: "image_url" as const, image_url: { url: "..." } }
-],
-            },
-          ],
+          messages: messages as any, // Type assertion for multimodal content
           temperature: 0.3,
           max_tokens: Settings.VISION_MAX_TOKENS,
         });

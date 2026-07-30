@@ -3,6 +3,9 @@
   "version": "7.0.0",
   "description": "SAGE — Systemic Agentic General Engine | Backend API",
   "main": "dist/index.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
