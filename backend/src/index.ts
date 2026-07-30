@@ -14,8 +14,13 @@ import agentRoutes from './routes/agents';
 
 const app = express();
 
+// ── Disable Railway's proxy CORS interference ──
+app.disable('x-powered-by');
+
 // ── Security ──
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: false, // Allow cross-origin resources
+}));
 
 // CORS - Allow multiple origins in production
 const allowedOrigins = [
@@ -31,28 +36,52 @@ const isVercelOrigin = (origin: string) => origin.endsWith('.vercel.app');
 app.use(
   cors({
     origin: function (origin, callback) {
+      console.log(`[CORS] Request from origin: ${origin || 'no-origin'}`);
+      
       // Allow requests with no origin (mobile apps, curl, etc.)
       if (!origin) return callback(null, true);
       
       // Check if origin is in allowed list OR is a Vercel deployment
       if (allowedOrigins.includes(origin) || isVercelOrigin(origin)) {
+        console.log(`[CORS] ✅ Allowed: ${origin}`);
         return callback(null, true);
       }
       
       // In development, be lenient
       if (Settings.NODE_ENV !== 'production') {
+        console.log(`[CORS] ⚠️ Dev mode - allowing: ${origin}`);
         return callback(null, true);
       }
       
       // In production, reject unknown origins
+      console.log(`[CORS] ❌ Blocked: ${origin}`);
       const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
       return callback(new Error(msg), false);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: ['Access-Control-Allow-Origin'],
   })
 );
+
+// ── Explicitly set CORS headers to override Railway proxy ──
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && (allowedOrigins.includes(origin) || isVercelOrigin(origin))) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  }
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+});
 
 // ── Rate Limiting ──
 const limiter = rateLimit({
