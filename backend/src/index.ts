@@ -22,7 +22,11 @@ const allowedOrigins = [
   Settings.FRONTEND_URL,
   'http://localhost:3000',
   'http://localhost:3001',
+  'https://sage-delta-three.vercel.app',
 ].filter(Boolean);
+
+// Allow any Vercel deployment (*.vercel.app)
+const isVercelOrigin = (origin: string) => origin.endsWith('.vercel.app');
 
 app.use(
   cors({
@@ -30,14 +34,19 @@ app.use(
       // Allow requests with no origin (mobile apps, curl, etc.)
       if (!origin) return callback(null, true);
       
-      if (allowedOrigins.indexOf(origin) === -1) {
-        // In production, be strict. In dev, be lenient.
-        if (Settings.NODE_ENV === 'production') {
-          const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-          return callback(new Error(msg), false);
-        }
+      // Check if origin is in allowed list OR is a Vercel deployment
+      if (allowedOrigins.includes(origin) || isVercelOrigin(origin)) {
+        return callback(null, true);
       }
-      return callback(null, true);
+      
+      // In development, be lenient
+      if (Settings.NODE_ENV !== 'production') {
+        return callback(null, true);
+      }
+      
+      // In production, reject unknown origins
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
