@@ -1,5 +1,5 @@
 /**
- * components/layout/DashboardLayout.tsx — 3-column Mission Control
+ * components/layout/DashboardLayout.tsx — Responsive layout with mobile sidebar support
  */
 'use client';
 
@@ -22,7 +22,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       {/* Body: Sidebar + Content */}
       <div className="flex flex-1 overflow-hidden relative z-10">
         <Sidebar />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-6 scroll-smooth">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 md:px-6 py-4 md:py-6 scroll-smooth">
           {children}
         </main>
       </div>

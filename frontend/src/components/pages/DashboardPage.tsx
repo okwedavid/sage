@@ -26,10 +26,10 @@ export function DashboardPage() {
     <div className="max-w-6xl mx-auto space-y-8 pb-8">
       {/* Page header */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="font-display text-3xl font-bold text-txt-primary mb-2">
+        <h1 className="font-display text-2xl sm:text-3xl font-bold text-txt-primary mb-2">
           AI-Powered Intelligence
         </h1>
-        <p className="text-txt-secondary">
+        <p className="text-sm md:text-base text-txt-secondary">
           Welcome back. Your cognitive engine is ready to process any task.
         </p>
       </motion.div>
@@ -68,28 +68,29 @@ export function DashboardPage() {
       </motion.div>
 
       {/* Stats + Quick Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 gap-5">
         {/* Real-time monitoring */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="lg:col-span-2 glass-card p-6"
+          className="glass-card p-4 md:p-6"
         >
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4 md:mb-6">
             <div>
-              <h2 className="font-display text-lg font-bold text-txt-primary">
+              <h2 className="font-display text-base md:text-lg font-bold text-txt-primary">
                 Real-time Monitoring
               </h2>
-              <p className="text-xs text-txt-muted mt-1">Live pipeline performance metrics</p>
+              <p className="text-[10px] md:text-xs text-txt-muted mt-1">Live pipeline performance metrics</p>
             </div>
-            <div className="flex items-center gap-2 text-status-success text-xs font-semibold">
-              <span className="w-2 h-2 rounded-full bg-status-success animate-pulse-slow" />
-              System Healthy
+            <div className="flex items-center gap-2 text-status-success text-[10px] md:text-xs font-semibold">
+              <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-status-success animate-pulse-slow" />
+              <span className="hidden sm:inline">System Healthy</span>
+              <span className="sm:hidden">Healthy</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-3 md:gap-4">
             <StatCard
               icon={<BarChart3 className="w-5 h-5" />}
               label="Total Queries"
@@ -122,10 +123,10 @@ export function DashboardPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="glass-card p-6"
+          className="glass-card p-4 md:p-6"
         >
-          <h2 className="font-display text-lg font-bold text-txt-primary mb-4">Pipeline Status</h2>
-          <div className="space-y-3">
+          <h2 className="font-display text-base md:text-lg font-bold text-txt-primary mb-4">Pipeline Status</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-3">
             {[
               { name: 'Normalizer', status: 'active', icon: '📝' },
               { name: 'Classifier', status: 'active', icon: '🧠' },
@@ -135,15 +136,15 @@ export function DashboardPage() {
             ].map((stage) => (
               <div
                 key={stage.name}
-                className="flex items-center justify-between p-3 rounded-xl bg-sage-card/50 border border-sage-border/50"
+                className="flex items-center justify-between p-2.5 md:p-3 rounded-xl bg-sage-card/50 border border-sage-border/50"
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-lg">{stage.icon}</span>
-                  <span className="text-sm font-medium text-txt-primary">{stage.name}</span>
+                <div className="flex items-center gap-2 md:gap-3">
+                  <span className="text-base md:text-lg">{stage.icon}</span>
+                  <span className="text-xs md:text-sm font-medium text-txt-primary">{stage.name}</span>
                 </div>
-                <span className="flex items-center gap-1.5 text-xs text-status-success font-semibold">
-                  <span className="w-1.5 h-1.5 rounded-full bg-status-success" />
-                  Ready
+                <span className="flex items-center gap-1 md:gap-1.5 text-[10px] md:text-xs text-status-success font-semibold">
+                  <span className="w-1 h-1 md:w-1.5 md:h-1.5 rounded-full bg-status-success" />
+                  <span className="hidden sm:inline">Ready</span>
                 </span>
               </div>
             ))}
@@ -156,24 +157,24 @@ export function DashboardPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
-        className="glass-card p-6"
+        className="glass-card p-4 md:p-6"
       >
-        <h2 className="font-display text-lg font-bold text-txt-primary mb-4">
+        <h2 className="font-display text-base md:text-lg font-bold text-txt-primary mb-4">
           Supported Task Types
         </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 md:gap-3">
           {Object.entries(TASK_COLORS).map(([type, color]) => (
             <div
               key={type}
-              className="flex items-center gap-2.5 p-3 rounded-xl bg-sage-card/50 border border-sage-border/50 hover:border-opacity-50 transition-all cursor-pointer hover:-translate-y-0.5"
+              className="flex items-center gap-2 md:gap-2.5 p-2.5 md:p-3 rounded-xl bg-sage-card/50 border border-sage-border/50 hover:border-opacity-50 transition-all cursor-pointer hover:-translate-y-0.5"
               style={{ borderColor: `${color}30` }}
               onClick={() => setPage('conversations')}
             >
               <span
-                className="w-2.5 h-2.5 rounded-full"
+                className="w-2 h-2 md:w-2.5 md:h-2.5 rounded-full shrink-0"
                 style={{ background: color, boxShadow: `0 0 8px ${color}50` }}
               />
-              <span className="text-xs font-mono font-semibold text-txt-primary">{type}</span>
+              <span className="text-[10px] md:text-xs font-mono font-semibold text-txt-primary truncate">{type}</span>
             </div>
           ))}
         </div>
@@ -184,10 +185,10 @@ export function DashboardPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5 }}
-        className="glass-card p-6"
+        className="glass-card p-4 md:p-6"
       >
-        <h2 className="font-display text-lg font-bold text-txt-primary mb-4">Quick Start</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <h2 className="font-display text-base md:text-lg font-bold text-txt-primary mb-4">Quick Start</h2>
+        <div className="grid grid-cols-1 gap-3">
           {[
             'Research quantum computing and create study notes',
             'Build a React component for a pricing table',
@@ -197,10 +198,10 @@ export function DashboardPage() {
             <button
               key={prompt}
               onClick={() => setPage('conversations')}
-              className="text-left p-4 rounded-xl bg-sage-card/50 border border-sage-border hover:border-accent-primary/20 hover:bg-sage-hover transition-all duration-200 group"
+              className="text-left p-3 md:p-4 rounded-xl bg-sage-card/50 border border-sage-border hover:border-accent-primary/20 hover:bg-sage-hover transition-all duration-200 group"
             >
               <div className="flex items-start justify-between gap-2">
-                <span className="text-sm text-txt-secondary group-hover:text-txt-primary transition-colors">
+                <span className="text-xs md:text-sm text-txt-secondary group-hover:text-txt-primary transition-colors">
                   {prompt}
                 </span>
                 <ArrowRight className="w-4 h-4 text-txt-muted group-hover:text-accent-primary shrink-0 mt-0.5 transition-colors" />
@@ -231,16 +232,16 @@ function ServiceCard({
   return (
     <div className="service-card group" onClick={onClick}>
       <div
-        className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5 transition-transform duration-300 group-hover:scale-110"
+        className="w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center mb-4 md:mb-5 transition-transform duration-300 group-hover:scale-110"
         style={{ background: `${color}12`, border: `1px solid ${color}25` }}
       >
-        <div style={{ color }}>{icon}</div>
+        <div style={{ color }} className="[&>*]:w-6 [&>*]:h-6 md:[&>*]:w-7 md:[&>*]:h-7">{icon}</div>
       </div>
-      <h3 className="text-lg font-semibold text-txt-primary mb-2 relative z-10">{title}</h3>
-      <p className="text-sm text-txt-secondary leading-relaxed mb-5 relative z-10">{description}</p>
-      <div className="flex items-center gap-2 text-sm font-medium relative z-10" style={{ color }}>
+      <h3 className="text-base md:text-lg font-semibold text-txt-primary mb-2 relative z-10">{title}</h3>
+      <p className="text-xs md:text-sm text-txt-secondary leading-relaxed mb-4 md:mb-5 relative z-10">{description}</p>
+      <div className="flex items-center gap-2 text-xs md:text-sm font-medium relative z-10" style={{ color }}>
         {action}
-        <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+        <ArrowRight className="w-3 h-3 md:w-4 md:h-4 transition-transform group-hover:translate-x-1" />
       </div>
     </div>
   );
@@ -258,14 +259,14 @@ function StatCard({
   color: string;
 }) {
   return (
-    <div className="stat-card">
-      <div className="flex items-center gap-2 mb-3" style={{ color }}>
-        {icon}
-        <span className="text-[10px] font-bold tracking-[0.08em] text-txt-muted uppercase">
+    <div className="stat-card p-4 md:p-5">
+      <div className="flex items-center gap-2 mb-2 md:mb-3" style={{ color }}>
+        <div className="[&>*]:w-4 [&>*]:h-4 md:[&>*]:w-5 md:[&>*]:h-5">{icon}</div>
+        <span className="text-[9px] md:text-[10px] font-bold tracking-[0.08em] text-txt-muted uppercase">
           {label}
         </span>
       </div>
-      <div className="text-2xl font-display font-bold text-txt-primary">{value}</div>
+      <div className="text-xl md:text-2xl font-display font-bold text-txt-primary">{value}</div>
     </div>
   );
 }

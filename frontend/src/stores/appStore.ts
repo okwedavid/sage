@@ -54,6 +54,8 @@ interface AppState {
   setPage: (page: string) => void;
   sidebarOpen: boolean;
   toggleSidebar: () => void;
+  inspectorOpen: boolean;
+  toggleInspector: () => void;
 
   // Messages & Chat
   messages: Message[];
@@ -103,6 +105,8 @@ export const useAppStore = create<AppState>((set) => ({
   setPage: (page) => set({ currentPage: page }),
   sidebarOpen: true,
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+  inspectorOpen: true,
+  toggleInspector: () => set((s) => ({ inspectorOpen: !s.inspectorOpen })),
 
   // Messages
   messages: [],

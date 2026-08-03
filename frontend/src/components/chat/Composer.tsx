@@ -145,14 +145,14 @@ export function Composer() {
             exit={{ opacity: 0, height: 0 }}
             className="mb-3"
           >
-            <div className="inline-flex items-center gap-3 px-4 py-2.5 rounded-xl bg-sage-panel border border-accent-primary/20">
-              <ImageIcon className="w-4 h-4 text-accent-primary" />
-              <span className="text-sm text-txt-primary">{uploadedImage.name}</span>
+            <div className="inline-flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-2.5 rounded-xl bg-sage-panel border border-accent-primary/20">
+              <ImageIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-accent-primary shrink-0" />
+              <span className="text-xs md:text-sm text-txt-primary truncate max-w-[200px] md:max-w-none">{uploadedImage.name}</span>
               <button
                 onClick={() => setUploadedImage(null)}
-                className="text-txt-muted hover:text-status-error transition-colors"
+                className="text-txt-muted hover:text-status-error transition-colors shrink-0"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5 md:w-4 md:h-4" />
               </button>
             </div>
           </motion.div>
@@ -160,27 +160,27 @@ export function Composer() {
       </AnimatePresence>
 
       {/* Composer box */}
-      <div className="glass-card p-3 glow-ring transition-all duration-200 focus-within:border-accent-primary/40">
+      <div className="glass-card p-2 md:p-3 glow-ring transition-all duration-200 focus-within:border-accent-primary/40">
         {/* Tool buttons */}
         <div className="flex items-center gap-1 mb-2">
           <button
             onClick={() => setShowAttach(!showAttach)}
-            className="p-2 rounded-lg text-txt-muted hover:text-txt-primary hover:bg-sage-hover transition-all"
+            className="p-1.5 md:p-2 rounded-lg text-txt-muted hover:text-txt-primary hover:bg-sage-hover transition-all"
             title="Attach image"
           >
-            <Paperclip className="w-4 h-4" />
+            <Paperclip className="w-3.5 h-3.5 md:w-4 md:h-4" />
           </button>
           <button
-            className="p-2 rounded-lg text-txt-muted hover:text-txt-primary hover:bg-sage-hover transition-all"
+            className="p-1.5 md:p-2 rounded-lg text-txt-muted hover:text-txt-primary hover:bg-sage-hover transition-all"
             title="Voice input"
           >
-            <Mic className="w-4 h-4" />
+            <Mic className="w-3.5 h-3.5 md:w-4 md:h-4" />
           </button>
           <button
-            className="p-2 rounded-lg text-txt-muted hover:text-txt-primary hover:bg-sage-hover transition-all"
+            className="p-1.5 md:p-2 rounded-lg text-txt-muted hover:text-txt-primary hover:bg-sage-hover transition-all"
             title="Paste URL"
           >
-            <Globe className="w-4 h-4" />
+            <Globe className="w-3.5 h-3.5 md:w-4 md:h-4" />
           </button>
 
           {/* Attach panel */}
@@ -194,10 +194,11 @@ export function Composer() {
               >
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent-primary/10 border border-accent-primary/20 text-accent-primary text-xs font-medium hover:bg-accent-primary/20 transition-all"
+                  className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-3 py-1.5 rounded-lg bg-accent-primary/10 border border-accent-primary/20 text-accent-primary text-[10px] md:text-xs font-medium hover:bg-accent-primary/20 transition-all"
                 >
-                  <ImageIcon className="w-3.5 h-3.5" />
-                  Upload Image
+                  <ImageIcon className="w-3 h-3 md:w-3.5 md:h-3.5" />
+                  <span className="hidden sm:inline">Upload Image</span>
+                  <span className="sm:hidden">Upload</span>
                 </button>
               </motion.div>
             )}
@@ -213,7 +214,7 @@ export function Composer() {
             onKeyDown={handleKeyDown}
             placeholder="Ask anything... (text, URL, or upload image)"
             rows={1}
-            className="flex-1 bg-transparent border-none outline-none resize-none text-[13.5px] text-txt-primary placeholder:text-txt-muted max-h-32 overflow-y-auto py-2 px-1"
+            className="flex-1 bg-transparent border-none outline-none resize-none text-[13px] md:text-[13.5px] text-txt-primary placeholder:text-txt-muted max-h-32 overflow-y-auto py-2 px-1"
             style={{ minHeight: '40px' }}
             onInput={(e) => {
               const target = e.target as HTMLTextAreaElement;
@@ -224,12 +225,12 @@ export function Composer() {
           <button
             onClick={handleSend}
             disabled={isProcessing || (!text.trim() && !uploadedImage)}
-            className="w-10 h-10 rounded-xl bg-gradient-button flex items-center justify-center text-white shadow-glow-md hover:shadow-glow-lg transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-glow-md"
+            className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-button flex items-center justify-center text-white shadow-glow-md hover:shadow-glow-lg transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-glow-md shrink-0"
           >
             {isProcessing ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <div className="w-3.5 h-3.5 md:w-4 md:h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
-              <Send className="w-4 h-4" />
+              <Send className="w-3.5 h-3.5 md:w-4 md:h-4" />
             )}
           </button>
         </div>

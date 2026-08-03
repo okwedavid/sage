@@ -13,7 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, Brain } from 'lucide-react';
 
 export function ChatPage() {
-  const { messages, isProcessing, user } = useAppStore();
+  const { messages, isProcessing, user, inspectorOpen } = useAppStore();
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -21,7 +21,7 @@ export function ChatPage() {
   }, [messages]);
 
   return (
-    <div className="max-w-7xl mx-auto flex gap-5 h-[calc(100vh-100px)]">
+    <div className="max-w-7xl mx-auto flex gap-3 md:gap-5 h-[calc(100vh-100px)]">
       {/* Center: Chat + Composer */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Pipeline visualization */}
@@ -57,10 +57,22 @@ export function ChatPage() {
         </div>
       </div>
 
-      {/* Right: Inspector */}
-      <div className="w-[280px] shrink-0 overflow-y-auto hidden lg:block">
-        <Inspector />
-      </div>
+      {/* Right: Inspector - Toggleable */}
+      <AnimatePresence>
+        {inspectorOpen && (
+          <motion.div
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 280, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
+            className="hidden md:block shrink-0 overflow-hidden"
+          >
+            <div className="w-[280px] h-full overflow-y-auto">
+              <Inspector />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -70,12 +82,12 @@ function EmptyState({ userName }: { userName: string }) {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col items-center justify-center h-full text-center"
+      className="flex flex-col items-center justify-center h-full text-center px-4"
     >
       <div className="w-16 h-16 rounded-2xl bg-gradient-primary flex items-center justify-center shadow-glow-lg mb-6">
         <Brain className="w-8 h-8 text-white" />
       </div>
-      <h2 className="font-display text-xl font-bold text-txt-primary mb-2">
+      <h2 className="font-display text-xl md:text-2xl font-bold text-txt-primary mb-2">
         Welcome back, {userName}
       </h2>
       <p className="text-txt-secondary text-sm mb-8 max-w-md">
