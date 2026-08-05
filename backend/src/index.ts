@@ -14,6 +14,7 @@ import authRoutes from './routes/auth';
 import conversationRoutes from './routes/conversations';
 import agentRoutes from './routes/agents';
 import apiKeyRoutes from './routes/api-keys';
+import adminRoutes from './routes/admin';
 
 const app = express();
 
@@ -119,6 +120,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/agents', agentRoutes);
 app.use('/api/keys', apiKeyRoutes);
+app.use('/api/admin', adminRoutes);
 
 // ── Monitoring: metrics snapshot (admin/ops) ──
 app.get('/api/metrics', (_req, res) => {
@@ -138,6 +140,7 @@ app.get('/', (_req, res) => {
       conversations: '/api/conversations',
       agents: '/api/agents',
       keys: '/api/keys',
+      admin: '/api/admin',
       metrics: '/api/metrics',
     },
   });

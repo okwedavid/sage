@@ -12,6 +12,7 @@ import {
   BrainCircuit,
   Wrench,
   Settings,
+  ShieldCheck,
   Plus,
   LogOut,
   X,
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { id: 'agents', label: 'Agents', icon: Bot },
   { id: 'memory', label: 'Memory', icon: BrainCircuit },
   { id: 'tools', label: 'Tools', icon: Wrench },
+  { id: 'admin', label: 'Admin', icon: ShieldCheck },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 

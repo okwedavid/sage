@@ -99,4 +99,42 @@ export const api = {
   async getAgentStatus() {
     return apiFetch('/api/agents/status');
   },
+
+  // API keys (platform)
+  async listApiKeys() {
+    return apiFetch('/api/keys');
+  },
+
+  async createApiKey(name?: string, scopes?: string[]) {
+    return apiFetch('/api/keys', { method: 'POST', body: JSON.stringify({ name, scopes }) });
+  },
+
+  async rotateApiKey(id: string) {
+    return apiFetch(`/api/keys/${id}/rotate`, { method: 'POST', body: JSON.stringify({}) });
+  },
+
+  async revokeApiKey(id: string) {
+    return apiFetch(`/api/keys/${id}`, { method: 'DELETE' });
+  },
+
+  // Admin
+  async adminSummary() {
+    return apiFetch('/api/admin/summary');
+  },
+
+  async adminUsers() {
+    return apiFetch('/api/admin/users');
+  },
+
+  async adminBanUser(id: string, banned: boolean) {
+    return apiFetch(`/api/admin/users/${id}/ban`, { method: 'POST', body: JSON.stringify({ banned }) });
+  },
+
+  async adminConversations() {
+    return apiFetch('/api/admin/conversations');
+  },
+
+  async adminLogs() {
+    return apiFetch('/api/admin/logs');
+  },
 };
