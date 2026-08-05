@@ -7,6 +7,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { Settings } from './config/settings';
+import { logger, requestLogger } from './services/logger';
+import { metrics } from './services/metrics';
 import chatRoutes from './routes/chat';
 import authRoutes from './routes/auth';
 import conversationRoutes from './routes/conversations';
@@ -21,6 +23,21 @@ app.disable('x-powered-by');
 app.use(helmet({
   crossOriginResourcePolicy: false, // Allow cross-origin resources
 }));
+
+// ── Observability: structured request logging + request IDs ──
+app.use(requestLogger);
+
+// ── Observability: per-endpoint metrics ──
+app.use((req, res, next) => {
+  const start = Date.now();
+  // Capture the path synchronously: Express's parseurl cache can hold a
+  // router-stripped path by the time 'finish' fires.
+  const path = req.originalUrl.split('?')[0];
+  res.on('finish', () => {
+    metrics.record(path, res.statusCode, Date.now() - start);
+  });
+  next();
+});
 
 // CORS - Allow multiple origins in production
 const allowedOrigins = [
@@ -101,6 +118,11 @@ app.use('/api/auth', authRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/agents', agentRoutes);
 
+// ── Monitoring: metrics snapshot (admin/ops) ──
+app.get('/api/metrics', (_req, res) => {
+  res.json(metrics.snapshot());
+});
+
 // ── Root ──
 app.get('/', (_req, res) => {
   res.json({
@@ -113,13 +135,14 @@ app.get('/', (_req, res) => {
       auth: '/api/auth',
       conversations: '/api/conversations',
       agents: '/api/agents',
+      metrics: '/api/metrics',
     },
   });
 });
 
 // ── Error Handler ──
 // Maps body-parser and CORS failures to proper status codes instead of 500.
-app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err?.type === 'entity.parse.failed') {
     res.status(400).json({ error: 'Malformed JSON body' });
     return;
@@ -132,7 +155,7 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
     res.status(403).json({ error: err.message });
     return;
   }
-  console.error('Unhandled error:', err);
+  logger.error('unhandled error', { requestId: req.id, message: err?.message, stack: err?.stack });
   res.status(500).json({ error: 'Internal server error' });
 });
 
@@ -141,7 +164,17 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 // so importing `app` for tests never binds a port.
 /* v8 ignore start */
 if (require.main === module) {
-  app.listen(Settings.PORT, () => {
+  // Production boot guard: refuse to start with an insecure configuration.
+  if (Settings.NODE_ENV === 'production') {
+    const problems = Settings.assertProductionSafe();
+    if (problems.length > 0) {
+      console.error('❌ Refusing to start in production — configuration problems:');
+      for (const p of problems) console.error(`   • ${p}`);
+      process.exit(1);
+    }
+  }
+
+  const server = app.listen(Settings.PORT, () => {
     console.log(`
   ╔══════════════════════════════════════════╗
   ║  SAGE v${Settings.APP_VERSION} — Backend API             ║
@@ -153,6 +186,22 @@ if (require.main === module) {
   ╚══════════════════════════════════════════╝
   `);
   });
+
+  // Graceful shutdown: stop accepting connections, drain, then exit.
+  const shutdown = (signal: string) => {
+    logger.info(`received ${signal}, shutting down gracefully`);
+    server.close(() => {
+      logger.info('server closed');
+      process.exit(0);
+    });
+    // Force-exit if connections refuse to drain within 10s.
+    setTimeout(() => {
+      logger.error('forced exit after shutdown timeout');
+      process.exit(1);
+    }, 10_000).unref();
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 /* v8 ignore stop */
 
