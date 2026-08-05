@@ -2,7 +2,7 @@
  * services/logger.test.ts — Structured logging + request IDs
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { logger, requestLogger } from './logger';
+import { logger } from './logger';
 import { withServer, jsonFetch } from '../test-utils/http';
 
 vi.hoisted(() => {

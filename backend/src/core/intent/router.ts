@@ -5,7 +5,7 @@
  */
 import { IntentSchema, advanceStatus } from './schemas';
 import { Status } from '../enums';
-import { AgentRegistry, WorkerResult } from '../../agents/registry';
+import { AgentRegistry } from '../../agents/registry';
 
 export class IntentRouter {
   constructor(private registry: AgentRegistry) {}

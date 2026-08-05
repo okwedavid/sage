@@ -33,13 +33,11 @@ export class MetricsStore {
   } {
     let totalRequests = 0;
     let totalErrors = 0;
-    let totalLatencyMs = 0;
 
     const endpoints: EndpointMetric[] = [];
     for (const [endpoint, e] of this.endpoints) {
       totalRequests += e.count;
       totalErrors += e.errors;
-      totalLatencyMs += e.totalLatencyMs;
       endpoints.push({
         endpoint,
         requests: e.count,

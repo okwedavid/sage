@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { IntentNormalizer } from './normalizer';
 import { createIntent } from './schemas';
-import { TaskType, Status, OutputFormat, Priority } from '../enums';
+import { TaskType, OutputFormat, Priority } from '../enums';
 import { AgentRegistry } from '../../agents/registry';
 
 const { mockState } = vi.hoisted(() => ({

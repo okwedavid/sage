@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import { IntentRouter } from './router';
 import { createIntent } from './schemas';
 import { AgentRegistry } from '../../agents/registry';
-import { TaskType, OutputFormat, Status } from '../enums';
+import { TaskType, Status } from '../enums';
 
 function buildRegistry() {
   const registry = new AgentRegistry();

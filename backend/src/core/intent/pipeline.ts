@@ -8,7 +8,7 @@ import { IntentNormalizer } from './normalizer';
 import { IntentClassifier } from './classifier';
 import { IntentValidator } from './validator';
 import { IntentRouter } from './router';
-import { IntentSchema, intentToDict } from './schemas';
+import { IntentSchema } from './schemas';
 import { Status } from '../enums';
 import { AgentRegistry } from '../../agents/registry';
 
