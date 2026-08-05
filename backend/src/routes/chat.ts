@@ -8,6 +8,8 @@ import { AgentRegistry, GeneralWorker, WebWorker, VisionWorker } from '../agents
 import { Settings } from '../config/settings';
 import { AuthRequest, optionalAuth } from '../middleware/auth';
 import { intentToDict } from '../core/intent/schemas';
+import { isSupabaseConfigured, pingSupabase, recordUsage } from '../services/supabase';
+import { metrics } from '../services/metrics';
 
 const router = Router();
 
@@ -109,7 +111,17 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
 
     // Create pipeline with custom config if needed
     const pipe = getPipeline(apiKey, customModel);
+    const started = Date.now();
     const result = await pipe.process(message || '[Image attached] Analyze this image', attachments);
+
+    // Async usage tracking (never blocks the response)
+    recordUsage({
+      userId: req.userId || null,
+      endpoint: '/api/chat',
+      model: customModel || Settings.DEFAULT_MODEL,
+      statusCode: result.success ? 200 : 200,
+      latencyMs: Date.now() - started,
+    }).catch(() => {});
 
     res.json({
       success: result.success,
@@ -125,14 +137,23 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// GET /api/chat/health
-router.get('/health', (_req: Request, res: Response) => {
+// GET /api/chat/health — extended with dependency + metric probes
+router.get('/health', async (_req: Request, res: Response) => {
+  const supabaseReady = isSupabaseConfigured();
+  const supabaseOk = supabaseReady ? await pingSupabase() : false;
+
   res.json({
     status: 'ok',
     engine: 'SAGE v' + Settings.APP_VERSION,
     model: Settings.DEFAULT_MODEL,
     api_key: Settings.getMaskedKey(),
     uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    deps: {
+      groq: Settings.validate() ? 'ok' : 'missing',
+      supabase: supabaseReady ? (supabaseOk ? 'ok' : 'unreachable') : 'unconfigured',
+    },
+    metrics: metrics.snapshot(),
   });
 });
 

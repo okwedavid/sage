@@ -115,4 +115,49 @@ describe('rate limiting', () => {
       expect(third.body.error).toContain('Too many requests');
     });
   });
+
+  it('applies a stricter limiter to login attempts (brute-force guard)', async () => {
+    vi.resetModules();
+    vi.stubEnv('LOGIN_RATE_LIMIT_MAX', '2');
+    vi.stubEnv('RATE_LIMIT_MAX', '100000');
+    const { default: loginLimitedApp } = await import('../index');
+
+    await withServer(loginLimitedApp, async (baseUrl) => {
+      const attempt = () =>
+        jsonFetch(`${baseUrl}/api/auth/login`, {
+          method: 'POST',
+          body: JSON.stringify({ email: 'x@y.dev', password: 'wrong' }),
+        });
+
+      expect((await attempt()).status).toBe(401);
+      expect((await attempt()).status).toBe(401);
+      const third = await attempt();
+      expect(third.status).toBe(429);
+      expect(third.body.error).toContain('login');
+    });
+  });
+});
+
+describe('monitoring endpoints', () => {
+  it('exposes request metrics at /api/metrics', async () => {
+    await withServer(app, async (baseUrl) => {
+      await jsonFetch(`${baseUrl}/api/agents`);
+      const { status, body } = await jsonFetch(`${baseUrl}/api/metrics`);
+      expect(status).toBe(200);
+      expect(typeof body.totalRequests).toBe('number');
+      expect(typeof body.errorRate).toBe('number');
+      expect(Array.isArray(body.endpoints)).toBe(true);
+      expect(body.endpoints.some((e: any) => e.endpoint === '/api/agents')).toBe(true);
+    });
+  });
+
+  it('reports dependency status and metrics from the extended health endpoint', async () => {
+    await withServer(app, async (baseUrl) => {
+      const { status, body } = await jsonFetch(`${baseUrl}/api/chat/health`);
+      expect(status).toBe(200);
+      expect(body.deps.groq).toBe('ok');
+      expect(['unconfigured', 'ok', 'unreachable']).toContain(body.deps.supabase);
+      expect(typeof body.metrics.totalRequests).toBe('number');
+    });
+  });
 });

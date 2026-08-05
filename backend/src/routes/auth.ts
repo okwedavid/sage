@@ -9,6 +9,7 @@
  */
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
@@ -16,6 +17,24 @@ import { Settings } from '../config/settings';
 import { isSupabaseConfigured, createUser, findUserByEmail, findUserById, recordAudit } from '../services/supabase';
 
 const router = Router();
+
+// Stricter per-route limiters for auth endpoints — the global /api limiter
+// throttles everything but gives weak brute-force protection here.
+const loginLimiter = rateLimit({
+  windowMs: Settings.LOGIN_RATE_LIMIT_WINDOW_MS,
+  max: Settings.LOGIN_RATE_LIMIT_MAX,
+  message: { error: 'Too many login attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const registerLimiter = rateLimit({
+  windowMs: Settings.LOGIN_RATE_LIMIT_WINDOW_MS,
+  max: Math.max(Settings.LOGIN_RATE_LIMIT_MAX * 2, 20),
+  message: { error: 'Too many registration attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const scrypt = promisify(scryptCb) as (
   password: string,
@@ -61,7 +80,7 @@ function clientIp(req: Request): string {
 }
 
 // POST /api/auth/register
-router.post('/register', async (req: Request, res: Response) => {
+router.post('/register', registerLimiter, async (req: Request, res: Response) => {
   try {
     const { email, password, name } = req.body;
 
@@ -112,7 +131,7 @@ router.post('/register', async (req: Request, res: Response) => {
 });
 
 // POST /api/auth/login
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', loginLimiter, async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 

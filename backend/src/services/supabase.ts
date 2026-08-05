@@ -11,11 +11,17 @@ import { Settings } from '../config/settings';
 
 let supabase: SupabaseClient | null = null;
 
+/** The service key must be present and the URL must be a real http(s) URL. */
+function isConfigValid(): boolean {
+  const url = Settings.SUPABASE_URL.trim();
+  return Boolean(url && Settings.SUPABASE_SERVICE_KEY && /^https?:\/\//.test(url));
+}
+
 export function getSupabase(): SupabaseClient | null {
   if (supabase) return supabase;
 
-  if (!Settings.SUPABASE_URL || !Settings.SUPABASE_SERVICE_KEY) {
-    console.warn('⚠️ Supabase not configured — running without persistence');
+  if (!isConfigValid()) {
+    console.warn('⚠️ Supabase not configured (or invalid URL) — running without persistence');
     return null;
   }
 
@@ -32,7 +38,7 @@ export function getSupabase(): SupabaseClient | null {
 
 /** Whether the service is configured (and thus available for persistence). */
 export function isSupabaseConfigured(): boolean {
-  return Boolean(Settings.SUPABASE_URL && Settings.SUPABASE_SERVICE_KEY);
+  return isConfigValid();
 }
 
 /**
