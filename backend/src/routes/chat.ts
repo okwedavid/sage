@@ -11,6 +11,7 @@ import { jwtOrApiKey, ApiKeyRequest } from '../middleware/api-key';
 import { intentToDict } from '../core/intent/schemas';
 import { isSupabaseConfigured, pingSupabase, recordUsage } from '../services/supabase';
 import { metrics } from '../services/metrics';
+import { ConversationMemory } from '../services/context';
 
 const router = Router();
 
@@ -76,7 +77,7 @@ function getPipeline(apiKey: string, customModel?: string): IntentPipeline {
 // POST /api/chat — process a message through the pipeline
 router.post('/', jwtOrApiKey, async (req: AuthRequest & ApiKeyRequest, res: Response) => {
   try {
-    const { message, attachments = {}, customApiKey, customModel } = req.body;
+    const { message, attachments = {}, customApiKey, customModel, history } = req.body;
 
     if (message !== undefined && typeof message !== 'string') {
       res.status(400).json({ error: 'Message must be a string' });
@@ -113,7 +114,27 @@ router.post('/', jwtOrApiKey, async (req: AuthRequest & ApiKeyRequest, res: Resp
     // Create pipeline with custom config if needed
     const pipe = getPipeline(apiKey, customModel);
     const started = Date.now();
-    const result = await pipe.process(message || '[Image attached] Analyze this image', attachments);
+
+    // Build a memory context block from client-supplied history (if any).
+    // Clients send the last N turns; ConversationMemory truncates to a budget.
+    // History is untrusted input: entries and per-turn content are capped so a
+    // hostile client cannot inflate the prompt (MAX_MESSAGE_LENGTH only caps
+    // the `message` field).
+    const MAX_MEMORY_TURNS = 40;
+    const MAX_MEMORY_TURN_CHARS = 4000;
+    const recent = Array.isArray(history) ? history.slice(-MAX_MEMORY_TURNS) : [];
+    let memoryBlock: string | undefined;
+    if (recent.length > 0) {
+      const mem = new ConversationMemory(20);
+      for (const turn of recent) {
+        if (turn && (turn.role === 'user' || turn.role === 'assistant') && typeof turn.content === 'string') {
+          mem.add(turn.role, turn.content.slice(0, MAX_MEMORY_TURN_CHARS));
+        }
+      }
+      memoryBlock = mem.buildContext({ maxTokens: 800, maxTurns: 12 });
+    }
+
+    const result = await pipe.process(message || '[Image attached] Analyze this image', attachments, memoryBlock);
 
     // Async usage tracking (never blocks the response)
     recordUsage({

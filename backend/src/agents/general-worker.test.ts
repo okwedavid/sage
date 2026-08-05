@@ -67,7 +67,7 @@ describe('GeneralWorker', () => {
 
     await worker.execute(intent({ context: 'prior conversation notes' }));
 
-    expect(mockState.calls[0].messages[1].content).toContain('Context: prior conversation notes');
+    expect(mockState.calls[0].messages[1].content).toContain('Additional context: prior conversation notes');
   });
 
   it('uses the custom model when provided', async () => {

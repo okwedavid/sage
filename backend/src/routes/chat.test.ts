@@ -137,6 +137,49 @@ describe('POST /api/chat — happy paths', () => {
     });
   });
 
+  it('passes client-supplied history into the worker prompt as context', async () => {
+    await withServer(app, async (baseUrl) => {
+      const { status, body } = await postChat(baseUrl, {
+        message: 'summarize the plan',
+        history: [
+          { role: 'user', content: 'we are building an app' },
+          { role: 'assistant', content: 'great, let us plan it' },
+          { role: 'system', content: 'must be skipped' },
+        ],
+      });
+
+      expect(status).toBe(200);
+      expect(body.success).toBe(true);
+      const workerCall = mockGroq.calls.filter((c: any) => !c.response_format).pop();
+      expect(workerCall).toBeDefined();
+      const userContent = workerCall.messages[1].content;
+      expect(userContent).toContain('we are building an app');
+      expect(userContent).toContain('great, let us plan it');
+      // system-role turns are ignored when building memory
+      expect(userContent).not.toContain('must be skipped');
+    });
+  });
+
+  it('ignores malformed history entries', async () => {
+    await withServer(app, async (baseUrl) => {
+      const { status } = await postChat(baseUrl, {
+        message: 'hello there',
+        history: [
+          { role: 'user', content: 'first real turn' },
+          { role: 'robot', content: 'ignored' },
+          { content: 'no role' },
+          42,
+        ],
+      });
+
+      expect(status).toBe(200);
+      const workerCall = mockGroq.calls.filter((c: any) => !c.response_format).pop();
+      const userContent = workerCall.messages[1].content;
+      expect(userContent).toContain('first real turn');
+      expect(userContent).not.toContain('no role');
+    });
+  });
+
   it('uses a custom API key when valid, otherwise falls back to the server key', async () => {
     await withServer(app, async (baseUrl) => {
       const withKey = await postChat(baseUrl, { message: 'hello', customApiKey: 'gsk_custom_key' });

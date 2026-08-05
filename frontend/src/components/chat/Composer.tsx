@@ -14,6 +14,7 @@ export function Composer() {
   const [text, setText] = useState('');
   const [showAttach, setShowAttach] = useState(false);
   const {
+    messages,
     addMessage,
     isProcessing,
     setProcessing,
@@ -29,6 +30,14 @@ export function Composer() {
     const trimmed = text.trim();
     if (!trimmed && !uploadedImage) return;
     if (isProcessing) return;
+
+    // Snapshot recent turns as conversation memory so SAGE is context-aware.
+    // Computed BEFORE addMessage() so the current message is excluded, and
+    // filtered to drop prior assistant error messages that would pollute it.
+    const history = messages
+      .filter((m) => !(m.role === 'assistant' && m.content.startsWith('⚠️ Error')))
+      .slice(-12)
+      .map((m) => ({ role: m.role, content: m.content }));
 
     // Build user message
     const userMsg: Message = {
@@ -56,6 +65,7 @@ export function Composer() {
       const result = await api.chat({
         message: trimmed || '[Image attached] Analyze this image',
         attachments,
+        history,
       });
 
       const assistantMsg: Message = {

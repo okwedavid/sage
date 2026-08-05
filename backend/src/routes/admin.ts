@@ -67,6 +67,7 @@ router.get('/summary', async (req: AuthRequest, res: Response) => {
         errorRate: snapshot.errorRate,
         endpoints: snapshot.endpoints,
       },
+      workers: snapshot.workers,
       health: {
         engine: `SAGE v${Settings.APP_VERSION}`,
         model: Settings.DEFAULT_MODEL,

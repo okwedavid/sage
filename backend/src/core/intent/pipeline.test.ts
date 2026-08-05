@@ -8,6 +8,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createIntent } from './schemas';
 import { TaskType, Status, OutputFormat, Priority } from '../enums';
 import { AgentRegistry } from '../../agents/registry';
+import { metrics } from '../../services/metrics';
 
 // Injectable classifier state (vi.hoisted survives mock hoisting)
 const { mockState } = vi.hoisted(() => ({
@@ -141,6 +142,86 @@ describe('IntentPipeline', () => {
     expect(result.success).toBe(false);
     expect(result.response).toContain('System Error');
     expect(result.stages).toHaveLength(0);
+  });
+
+  it('attaches caller-supplied memory to the intent as context', async () => {
+    mockState.classifyResult = validClassifyResult();
+    const seen: any[] = [];
+    const pipeline = buildPipeline({
+      web: { execute: async (intent: any) => { seen.push(intent); return 'ok'; } },
+    });
+
+    await pipeline.process('research quantum computing', {}, 'prior conversation turns');
+
+    expect(seen[0].context).toBe('prior conversation turns');
+  });
+
+  it('leaves context untouched when no memory is supplied', async () => {
+    mockState.classifyResult = validClassifyResult();
+    const seen: any[] = [];
+    const pipeline = buildPipeline({
+      web: { execute: async (intent: any) => { seen.push(intent); return 'ok'; } },
+    });
+
+    await pipeline.process('research quantum computing');
+
+    expect(seen[0].context).toBe('');
+  });
+
+  it('records successful worker executions in metrics', async () => {
+    mockState.classifyResult = validClassifyResult();
+    const pipeline = buildPipeline();
+    const before = metrics.snapshot().workers.find((w) => w.worker === 'WebWorker')?.runs ?? 0;
+
+    await pipeline.process('research quantum computing');
+
+    const after = metrics.snapshot().workers.find((w) => w.worker === 'WebWorker');
+    expect(after?.runs).toBe(before + 1);
+    expect(after?.errors).toBe(0);
+    expect(after?.avgLatencyMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('flags error-prefixed worker replies in metrics', async () => {
+    mockState.classifyResult = validClassifyResult({
+      taskType: TaskType.EXPLAIN,
+      targetDomain: 'Physics',
+    });
+    const pipeline = buildPipeline({
+      general: { execute: async () => '❌ [GeneralWorker ERROR] groq down' },
+    });
+    const before = metrics.snapshot().workers.find((w) => w.worker === 'GeneralWorker');
+    const beforeRuns = before?.runs ?? 0;
+    const beforeErrors = before?.errors ?? 0;
+
+    const result = await pipeline.process('explain relativity');
+
+    expect(result.success).toBe(true); // error replies still return 200-level flow
+    const after = metrics.snapshot().workers.find((w) => w.worker === 'GeneralWorker');
+    expect(after?.runs).toBe(beforeRuns + 1);
+    expect(after?.errors).toBe(beforeErrors + 1);
+  });
+
+  it('records thrown worker failures in metrics as errors', async () => {
+    mockState.classifyResult = validClassifyResult({
+      taskType: TaskType.EXPLAIN,
+      targetDomain: 'Physics',
+    });
+    const pipeline = buildPipeline({
+      general: {
+        execute: async () => {
+          throw new Error('groq timeout');
+        },
+      },
+    });
+    const before = metrics.snapshot().workers.find((w) => w.worker === 'GeneralWorker');
+    const beforeRuns = before?.runs ?? 0;
+    const beforeErrors = before?.errors ?? 0;
+
+    await pipeline.process('explain relativity');
+
+    const after = metrics.snapshot().workers.find((w) => w.worker === 'GeneralWorker');
+    expect(after?.runs).toBe(beforeRuns + 1);
+    expect(after?.errors).toBe(beforeErrors + 1);
   });
 
   it('surfaces a rogue pre-advanced intent as a controlled System Error', async () => {

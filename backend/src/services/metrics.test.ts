@@ -41,4 +41,19 @@ describe('MetricsStore', () => {
     store.record('/api/chat', 404, 5);
     expect(store.snapshot().totalErrors).toBe(2);
   });
+
+  it('tracks worker executions with latencies and failures', () => {
+    store.recordWorker('GeneralWorker', true, 500);
+    store.recordWorker('GeneralWorker', true, 300);
+    store.recordWorker('WebWorker', false, 150);
+
+    const workers = store.snapshot().workers;
+    expect(workers).toHaveLength(2);
+    const gw = workers.find((w) => w.worker === 'GeneralWorker')!;
+    expect(gw.runs).toBe(2);
+    expect(gw.errors).toBe(0);
+    expect(gw.avgLatencyMs).toBe(400);
+    const ww = workers.find((w) => w.worker === 'WebWorker')!;
+    expect(ww.errors).toBe(1);
+  });
 });

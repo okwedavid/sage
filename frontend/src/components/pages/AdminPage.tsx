@@ -20,6 +20,7 @@ import {
   CheckCircle,
   RefreshCw,
   AlertTriangle,
+  Cpu,
 } from 'lucide-react';
 
 interface Summary {
@@ -28,6 +29,7 @@ interface Summary {
   users: { total: number; admins: number; banned: number };
   usage: { total: number; costUsd: number; avgLatencyMs: number; byEndpoint: { endpoint: string; count: number }[] };
   requests: { total: number; errors: number; errorRate: number; endpoints?: { endpoint: string; requests: number }[] };
+  workers?: { worker: string; runs: number; errors: number; avgLatencyMs: number }[];
   health: { engine: string; model: string; groq: string; supabase: string };
   memory: { rssMb: number; heapUsedMb: number };
 }
@@ -207,6 +209,38 @@ export function AdminPage() {
                   </div>
                 )}
               </motion.div>
+
+              {/* Worker performance */}
+              {(summary.workers?.length ?? 0) > 0 && (
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="glass-card p-6">
+                  <h2 className="font-display text-lg font-bold text-txt-primary mb-1 flex items-center gap-2">
+                    <Cpu className="w-5 h-5 text-accent-tertiary" /> Worker Performance
+                  </h2>
+                  <p className="text-xs text-txt-muted mb-4">Execution runs, failures, and average latency per worker.</p>
+                  <div className="space-y-3">
+                    {summary.workers!.map((w) => {
+                      const errRate = w.runs ? Math.round((w.errors / w.runs) * 100) : 0;
+                      return (
+                        <div key={w.worker} className="flex items-center gap-3">
+                          <span className="font-mono text-xs text-txt-secondary w-32 truncate">{w.worker}</span>
+                          <span className="text-xs font-mono text-txt-muted w-14 text-right">{w.runs} runs</span>
+                          <span className={`text-xs font-mono w-16 text-right ${w.errors > 0 ? 'text-status-error' : 'text-status-success'}`}>
+                            {w.errors} err
+                          </span>
+                          <span className="text-xs font-mono text-txt-muted w-16 text-right">{w.avgLatencyMs}ms</span>
+                          <div className="flex-1 h-2 rounded-full bg-sage-input overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${errRate > 0 ? 'bg-status-error/70' : 'bg-gradient-primary'}`}
+                              style={{ width: `${Math.max(2, 100 - errRate)}%` }}
+                              title={`${100 - errRate}% success`}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              )}
             </div>
           )}
 

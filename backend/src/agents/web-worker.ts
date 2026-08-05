@@ -9,6 +9,8 @@ import { BaseWorker } from './base-worker';
 import { IntentSchema } from '../core/intent/schemas';
 import { Settings } from '../config/settings';
 import { withRetry } from '../services/retry';
+import { buildSystemPrompt } from '../services/prompts';
+import { TaskType } from '../core/enums';
 
 export class WebWorker implements BaseWorker {
   private client: Groq;
@@ -76,11 +78,14 @@ export class WebWorker implements BaseWorker {
               messages: [
                 {
                   role: 'system',
-                  content: 'You are SAGE-WebAnalyst, a web intelligence specialist. Analyze web content deeply. Structure your answer with: Summary, Key Insights, Detailed Analysis. Use markdown with headers and bullets.',
+                  content: buildSystemPrompt(
+                    TaskType.RESEARCH,
+                    'You are SAGE-WebAnalyst, a web intelligence specialist. Analyze web content deeply. Structure your answer with: Summary, Key Insights, Detailed Analysis. Use markdown with headers and bullets.'
+                  ),
                 },
                 {
                   role: 'user',
-                  content: `USER QUESTION: ${intent.inputText}\n\nSOURCE URL: ${url}\n\nPAGE CONTENT:\n${content}\n\nTask: Provide Web Intelligence Report.`,
+                  content: `${intent.context ? `ADDITIONAL CONTEXT:\n${intent.context}\n\n` : ''}USER QUESTION: ${intent.inputText}\n\nSOURCE URL: ${url}\n\nPAGE CONTENT:\n${content}\n\nTask: Provide Web Intelligence Report.`,
                 },
               ],
               temperature: 0.3,
@@ -106,8 +111,14 @@ export class WebWorker implements BaseWorker {
             {
               model: this.model,
               messages: [
-                { role: 'system', content: 'You are SAGE research assistant. Provide structured factual reports.' },
-                { role: 'user', content: intent.inputText },
+                {
+                  role: 'system',
+                  content: buildSystemPrompt(
+                    TaskType.RESEARCH,
+                    'You are SAGE research assistant. Provide structured factual reports.'
+                  ),
+                },
+                { role: 'user', content: intent.context ? `${intent.context}\n\n${intent.inputText}` : intent.inputText },
               ],
               temperature: 0.7,
               max_tokens: Settings.MAX_TOKENS,

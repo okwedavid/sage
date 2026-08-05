@@ -6,6 +6,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 interface ChatRequest {
   message: string;
   attachments?: Record<string, any>;
+  history?: { role: 'user' | 'assistant'; content: string }[];
 }
 
 interface ChatResponse {

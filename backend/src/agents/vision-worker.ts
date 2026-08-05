@@ -8,6 +8,8 @@ import { BaseWorker } from './base-worker';
 import { IntentSchema } from '../core/intent/schemas';
 import { Settings } from '../config/settings';
 import { withRetry } from '../services/retry';
+import { buildSystemPrompt } from '../services/prompts';
+import { TaskType } from '../core/enums';
 
 const DEFAULT_VISION_QUESTION =
   'Analyze this image in detail. Describe what you see, key components, and provide insights. If it\'s a diagram, explain the architecture/flow.';
@@ -39,6 +41,9 @@ export class VisionWorker implements BaseWorker {
         ? DEFAULT_VISION_QUESTION
         : intent.inputText;
 
+    // Attach conversation memory (if any) so image analysis is context-aware.
+    const textPrompt = intent.context ? `${question}\n\nAdditional context:\n${intent.context}` : question;
+
     // Vision-capable models to try
     const modelsToTry = [
       'llama-3.2-11b-vision-preview',  // Most reliable vision model
@@ -58,7 +63,7 @@ export class VisionWorker implements BaseWorker {
           {
             role: 'user' as const,
             content: [
-              { type: 'text' as const, text: question },
+              { type: 'text' as const, text: textPrompt },
               { 
                 type: 'image_url' as const, 
                 image_url: { 
@@ -118,9 +123,12 @@ export class VisionWorker implements BaseWorker {
               messages: [
                 {
                   role: 'system',
-                  content: 'You are SAGE Vision assistant. User wanted image analysis but no image was processed. Be helpful.',
+                  content: buildSystemPrompt(
+                    TaskType.ANALYZE,
+                    'You are SAGE Vision assistant. User wanted image analysis but no image was processed. Be helpful.'
+                  ),
                 },
-                { role: 'user', content: intent.inputText },
+                { role: 'user', content: intent.context ? `${intent.context}\n\n${intent.inputText}` : intent.inputText },
               ],
               temperature: 0.7,
               max_tokens: Settings.MAX_TOKENS,
