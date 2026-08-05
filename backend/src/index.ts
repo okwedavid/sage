@@ -85,8 +85,8 @@ app.use((req, res, next) => {
 
 // ── Rate Limiting ──
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 min
-  max: 100,
+  windowMs: Settings.RATE_LIMIT_WINDOW_MS,
+  max: Settings.RATE_LIMIT_MAX,
   message: { error: 'Too many requests, please try again later' },
 });
 app.use('/api/', limiter);
@@ -118,14 +118,31 @@ app.get('/', (_req, res) => {
 });
 
 // ── Error Handler ──
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+// Maps body-parser and CORS failures to proper status codes instead of 500.
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (err?.type === 'entity.parse.failed') {
+    res.status(400).json({ error: 'Malformed JSON body' });
+    return;
+  }
+  if (err?.type === 'entity.too.large') {
+    res.status(413).json({ error: 'Payload too large' });
+    return;
+  }
+  if (typeof err?.message === 'string' && err.message.startsWith('The CORS policy for this site')) {
+    res.status(403).json({ error: err.message });
+    return;
+  }
   console.error('Unhandled error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });
 
 // ── Start ──
-app.listen(Settings.PORT, () => {
-  console.log(`
+// Only listen when run directly (node dist/index.js / tsx src/index.ts),
+// so importing `app` for tests never binds a port.
+/* v8 ignore start */
+if (require.main === module) {
+  app.listen(Settings.PORT, () => {
+    console.log(`
   ╔══════════════════════════════════════════╗
   ║  SAGE v${Settings.APP_VERSION} — Backend API             ║
   ║  Systemic Agentic General Engine         ║
@@ -135,6 +152,8 @@ app.listen(Settings.PORT, () => {
   ║  🔑 API: ${Settings.getMaskedKey().padEnd(28)}  ║
   ╚══════════════════════════════════════════╝
   `);
-});
+  });
+}
+/* v8 ignore stop */
 
 export default app;

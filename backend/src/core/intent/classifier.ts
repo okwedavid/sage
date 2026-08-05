@@ -80,11 +80,18 @@ export class IntentClassifier {
         ? (prio as Priority)
         : Priority.NORMAL;
 
+      // Clamp confidence to [0,1] — a rogue/malformed model response must not
+      // crash createIntent (which rejects out-of-range values).
+      const rawConfidence = parseFloat(data.confidence_score);
+      const confidenceScore = Number.isFinite(rawConfidence)
+        ? Math.min(1, Math.max(0, rawConfidence))
+        : 0.85;
+
       return createIntent({
         inputText: textInput,
         taskType: taskTypeStr as TaskType,
         targetDomain: data.target_domain || 'General',
-        confidenceScore: parseFloat(data.confidence_score) || 0.85,
+        confidenceScore,
         goal: data.summary || '',
         priority: validPriority,
         entities: data.entities || {},

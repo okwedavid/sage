@@ -5,7 +5,14 @@
  * FORBIDDEN: Business logic
  */
 import dotenv from 'dotenv';
+
+// Load .env (dev defaults), then .env.production to fill gaps when in production.
+// dotenv never overrides variables already present in process.env, so injected
+// env vars (Railway/Vercel) always take precedence over committed files.
 dotenv.config();
+if (process.env.NODE_ENV === 'production') {
+  dotenv.config({ path: '.env.production' });
+}
 
 export const Settings = {
   // Server
@@ -28,6 +35,17 @@ export const Settings = {
   // JWT
   JWT_SECRET: process.env.JWT_SECRET || 'sage-dev-secret',
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
+
+  // Rate limiting (guarded so invalid/zero env values can't disable or brick the limiter)
+  RATE_LIMIT_MAX: Math.max(1, parseInt(process.env.RATE_LIMIT_MAX || '100', 10) || 100),
+  RATE_LIMIT_WINDOW_MS: Math.max(
+    1000,
+    parseInt(process.env.RATE_LIMIT_WINDOW_MS || String(15 * 60 * 1000), 10) || 15 * 60 * 1000
+  ),
+
+  // Input limits (security)
+  MAX_MESSAGE_LENGTH: parseInt(process.env.MAX_MESSAGE_LENGTH || '50000', 10),
+  MAX_ATTACHMENT_BYTES: parseInt(process.env.MAX_ATTACHMENT_BYTES || String(8 * 1024 * 1024), 10),
 
   // Pipeline
   CONFIDENCE_THRESHOLD: 0.4,
