@@ -7,6 +7,7 @@ import Groq from 'groq-sdk';
 import { BaseWorker } from './base-worker';
 import { IntentSchema } from '../core/intent/schemas';
 import { Settings } from '../config/settings';
+import { withRetry } from '../services/retry';
 
 const DEFAULT_VISION_QUESTION =
   'Analyze this image in detail. Describe what you see, key components, and provide insights. If it\'s a diagram, explain the architecture/flow.';
@@ -68,12 +69,19 @@ export class VisionWorker implements BaseWorker {
           },
         ];
 
-        const response = await this.client.chat.completions.create({
-          model: modelId,
-          messages: messages as any, // Type assertion for multimodal content
-          temperature: 0.3,
-          max_tokens: Settings.VISION_MAX_TOKENS,
-        });
+        const response = await withRetry(
+          () =>
+            this.client.chat.completions.create(
+              {
+                model: modelId,
+                messages: messages as any, // Type assertion for multimodal content
+                temperature: 0.3,
+                max_tokens: Settings.VISION_MAX_TOKENS,
+              },
+              { signal: AbortSignal.timeout(Settings.GROQ_TIMEOUT_MS) }
+            ),
+          { attempts: 2 }
+        );
 
         const analysis = response.choices[0].message.content || '';
         console.log(`✅ Vision analysis complete using ${modelId}`);
@@ -102,18 +110,25 @@ export class VisionWorker implements BaseWorker {
 
   private async fallback(intent: IntentSchema): Promise<string> {
     try {
-      const response = await this.client.chat.completions.create({
-        model: Settings.DEFAULT_MODEL,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are SAGE Vision assistant. User wanted image analysis but no image was processed. Be helpful.',
-          },
-          { role: 'user', content: intent.inputText },
-        ],
-        temperature: 0.7,
-        max_tokens: Settings.MAX_TOKENS,
-      });
+      const response = await withRetry(
+        () =>
+          this.client.chat.completions.create(
+            {
+              model: Settings.DEFAULT_MODEL,
+              messages: [
+                {
+                  role: 'system',
+                  content: 'You are SAGE Vision assistant. User wanted image analysis but no image was processed. Be helpful.',
+                },
+                { role: 'user', content: intent.inputText },
+              ],
+              temperature: 0.7,
+              max_tokens: Settings.MAX_TOKENS,
+            },
+            { signal: AbortSignal.timeout(Settings.GROQ_TIMEOUT_MS) }
+          ),
+        { attempts: 2 }
+      );
       return response.choices[0].message.content || '';
     } catch (error: any) {
       return `[VisionWorker Fallback ERROR] ${error.message}`;

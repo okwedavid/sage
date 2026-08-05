@@ -21,7 +21,14 @@ vi.mock('groq-sdk', () => ({
         create: async (args: any) => {
           mockState.calls.push(args);
           if (mockState.failModels[args.model]) {
-            throw new Error(mockState.failModels[args.model]);
+            const msg = mockState.failModels[args.model];
+            // Realistic SDK errors carry an HTTP status.
+            const status = msg.includes('Invalid API key')
+              ? 401
+              : msg.includes('rate limit')
+                ? 429
+                : 404;
+            throw Object.assign(new Error(msg), { status });
           }
           return { choices: [{ message: { content: mockState.successContent } }] };
         },

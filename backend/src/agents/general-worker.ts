@@ -8,6 +8,7 @@ import { BaseWorker } from './base-worker';
 import { IntentSchema } from '../core/intent/schemas';
 import { TaskType } from '../core/enums';
 import { Settings } from '../config/settings';
+import { withRetry } from '../services/retry';
 
 const SYSTEM_ROLES: Record<string, string> = {
   [TaskType.RESEARCH]: 'You are SAGE, a deep researcher. Provide structured, factual reports with clear sections, key concepts, and insights. Use markdown formatting.',
@@ -42,15 +43,22 @@ export class GeneralWorker implements BaseWorker {
     }
 
     try {
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        messages: [
-          { role: 'system', content: role },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.7,
-        max_tokens: Settings.MAX_TOKENS,
-      });
+      const response = await withRetry(
+        () =>
+          this.client.chat.completions.create(
+            {
+              model: this.model,
+              messages: [
+                { role: 'system', content: role },
+                { role: 'user', content: userPrompt },
+              ],
+              temperature: 0.7,
+              max_tokens: Settings.MAX_TOKENS,
+            },
+            { signal: AbortSignal.timeout(Settings.GROQ_TIMEOUT_MS) }
+          ),
+        { attempts: 2 }
+      );
       return response.choices[0].message.content || '';
     } catch (error: any) {
       return `❌ [GeneralWorker ERROR] ${error.message}`;
