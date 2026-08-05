@@ -6,7 +6,8 @@ import { Router, Request, Response } from 'express';
 import { IntentPipeline } from '../core/intent';
 import { AgentRegistry, GeneralWorker, WebWorker, VisionWorker } from '../agents';
 import { Settings } from '../config/settings';
-import { AuthRequest, optionalAuth } from '../middleware/auth';
+import { AuthRequest } from '../middleware/auth';
+import { jwtOrApiKey, ApiKeyRequest } from '../middleware/api-key';
 import { intentToDict } from '../core/intent/schemas';
 import { isSupabaseConfigured, pingSupabase, recordUsage } from '../services/supabase';
 import { metrics } from '../services/metrics';
@@ -73,7 +74,7 @@ function getPipeline(apiKey: string, customModel?: string): IntentPipeline {
 }
 
 // POST /api/chat — process a message through the pipeline
-router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
+router.post('/', jwtOrApiKey, async (req: AuthRequest & ApiKeyRequest, res: Response) => {
   try {
     const { message, attachments = {}, customApiKey, customModel } = req.body;
 

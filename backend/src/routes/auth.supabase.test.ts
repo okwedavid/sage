@@ -20,10 +20,10 @@ const { mockSupabase } = vi.hoisted(() => ({
 
 vi.mock('../services/supabase', () => ({
   isSupabaseConfigured: () => mockSupabase.configured,
-  createUser: (...args: any[]) => mockSupabase.createUser(...args),
-  findUserByEmail: (...args: any[]) => mockSupabase.findUserByEmail(...args),
-  findUserById: (...args: any[]) => mockSupabase.findUserById(...args),
-  recordAudit: (...args: any[]) => mockSupabase.recordAudit(...args),
+  createUser: (...args: any[]) => (mockSupabase.createUser as any)(...args),
+  findUserByEmail: (...args: any[]) => (mockSupabase.findUserByEmail as any)(...args),
+  findUserById: (...args: any[]) => (mockSupabase.findUserById as any)(...args),
+  recordAudit: (...args: any[]) => (mockSupabase.recordAudit as any)(...args),
 }));
 
 vi.hoisted(() => {

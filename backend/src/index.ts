@@ -13,6 +13,7 @@ import chatRoutes from './routes/chat';
 import authRoutes from './routes/auth';
 import conversationRoutes from './routes/conversations';
 import agentRoutes from './routes/agents';
+import apiKeyRoutes from './routes/api-keys';
 
 const app = express();
 
@@ -117,6 +118,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/agents', agentRoutes);
+app.use('/api/keys', apiKeyRoutes);
 
 // ── Monitoring: metrics snapshot (admin/ops) ──
 app.get('/api/metrics', (_req, res) => {
@@ -135,6 +137,7 @@ app.get('/', (_req, res) => {
       auth: '/api/auth',
       conversations: '/api/conversations',
       agents: '/api/agents',
+      keys: '/api/keys',
       metrics: '/api/metrics',
     },
   });
