@@ -1,6 +1,11 @@
 /**
  * routes/auth.ts
  * OWNS: Authentication endpoints
+ *
+ * Persistence: when Supabase is configured, users are stored in the `users`
+ * table (scrypt-hashed passwords). When it is not, an in-memory Map is used so
+ * the app still works for local/demo runs. The two modes never mix: if
+ * Supabase is configured, failures are real errors (no silent split-brain).
  */
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
@@ -8,6 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { Settings } from '../config/settings';
+import { isSupabaseConfigured, createUser, findUserByEmail, findUserById, recordAudit } from '../services/supabase';
 
 const router = Router();
 
@@ -34,8 +40,25 @@ async function verifyPassword(password: string, stored: string): Promise<boolean
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-// In-memory user store (replace with Supabase Auth in production)
-const users: Map<string, { id: string; email: string; password: string; name: string }> = new Map();
+// In-memory fallback user store (only when Supabase is not configured)
+const users: Map<string, { id: string; email: string; password: string; name: string; bannedUntil?: string }> = new Map();
+
+interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  isAdmin?: boolean;
+}
+
+function signToken(user: AuthUser): string {
+  return jwt.sign({ userId: user.id, email: user.email }, Settings.JWT_SECRET, {
+    expiresIn: Settings.JWT_EXPIRES_IN,
+  } as jwt.SignOptions);
+}
+
+function clientIp(req: Request): string {
+  return (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress || '';
+}
 
 // POST /api/auth/register
 router.post('/register', async (req: Request, res: Response) => {
@@ -46,33 +69,42 @@ router.post('/register', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Email and password required' });
       return;
     }
-
     if (typeof password !== 'string' || password.length < 6) {
       res.status(400).json({ error: 'Password must be at least 6 characters' });
       return;
     }
+    if (typeof email !== 'string' || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      res.status(400).json({ error: 'Invalid email address' });
+      return;
+    }
 
+    const displayName = name || email.split('@')[0];
+    const userId = uuidv4();
+    const passwordHash = await hashPassword(password);
+
+    if (isSupabaseConfigured()) {
+      const existing = await findUserByEmail(email);
+      if (existing) {
+        res.status(409).json({ error: 'User already exists' });
+        return;
+      }
+      const user = await createUser({ id: userId, email, name: displayName, passwordHash });
+      if (!user) {
+        res.status(500).json({ error: 'Registration failed' });
+        return;
+      }
+      await recordAudit({ actorType: 'user', actorId: user.id, action: 'auth.register', resource: email, ip: clientIp(req), userAgent: req.headers['user-agent'] as string });
+      res.status(201).json({ token: signToken(user), user: { id: user.id, email, name: user.name } });
+      return;
+    }
+
+    // In-memory fallback
     if (users.has(email)) {
       res.status(409).json({ error: 'User already exists' });
       return;
     }
-
-  const userId = uuidv4();
-  users.set(email, {
-    id: userId,
-    email,
-    password: await hashPassword(password),
-    name: name || email.split('@')[0],
-  });
-
-  const token = jwt.sign({ userId, email }, Settings.JWT_SECRET, {
-    expiresIn: Settings.JWT_EXPIRES_IN,
-  } as jwt.SignOptions);
-
-  res.status(201).json({
-    token,
-    user: { id: userId, email, name: name || email.split('@')[0] },
-  });
+    users.set(email, { id: userId, email, password: passwordHash, name: displayName });
+    res.status(201).json({ token: signToken({ id: userId, email, name: displayName }), user: { id: userId, email, name: displayName } });
   } catch (error: any) {
     console.error('Register error:', error);
     res.status(500).json({ error: 'Registration failed' });
@@ -84,27 +116,87 @@ router.post('/login', async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
+    if (!email || typeof password !== 'string') {
+      res.status(400).json({ error: 'Email and password required' });
+      return;
+    }
+
+    if (isSupabaseConfigured()) {
+      const user = await findUserByEmail(email);
+      if (!user || !user.password_hash) {
+        res.status(401).json({ error: 'Invalid credentials' });
+        return;
+      }
+      const ok = await verifyPassword(password, user.password_hash);
+      if (!ok) {
+        res.status(401).json({ error: 'Invalid credentials' });
+        return;
+      }
+      if (user.banned_until && new Date(user.banned_until).getTime() > Date.now()) {
+        res.status(403).json({ error: 'Account suspended. Contact support.' });
+        return;
+      }
+      await recordAudit({ actorType: 'user', actorId: user.id, action: 'auth.login', resource: email, ip: clientIp(req), userAgent: req.headers['user-agent'] as string });
+      res.json({ token: signToken(user), user: { id: user.id, email: user.email, name: user.name, isAdmin: user.is_admin } });
+      return;
+    }
+
+    // In-memory fallback
     const user = users.get(email);
     if (!user || !(await verifyPassword(password, user.password))) {
       res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
-
-  const token = jwt.sign({ userId: user.id, email: user.email }, Settings.JWT_SECRET, {
-    expiresIn: Settings.JWT_EXPIRES_IN,
-  } as jwt.SignOptions);
-
-  res.json({
-    token,
-    user: { id: user.id, email: user.email, name: user.name },
-  });
+    if (user.bannedUntil && new Date(user.bannedUntil).getTime() > Date.now()) {
+      res.status(403).json({ error: 'Account suspended. Contact support.' });
+      return;
+    }
+    res.json({ token: signToken(user), user: { id: user.id, email: user.email, name: user.name, isAdmin: false } });
   } catch (error: any) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Login failed' });
   }
 });
 
-// POST /api/auth/demo — instant demo access
+// GET /api/auth/me — resolve the current token to a user (used by admin checks)
+router.get('/me', async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'No token provided' });
+      return;
+    }
+    let decoded: any;
+    try {
+      decoded = jwt.verify(authHeader.slice(7), Settings.JWT_SECRET);
+    } catch {
+      res.status(401).json({ error: 'Invalid or expired token' });
+      return;
+    }
+
+    if (isSupabaseConfigured()) {
+      const user = await findUserById(decoded.userId);
+      if (!user) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+      res.json({ user: { id: user.id, email: user.email, name: user.name, isAdmin: user.is_admin } });
+      return;
+    }
+
+    const memUser = Array.from(users.values()).find((u) => u.id === decoded.userId);
+    if (!memUser) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+    res.json({ user: { id: memUser.id, email: memUser.email, name: memUser.name, isAdmin: false } });
+  } catch (error: any) {
+    console.error('Me error:', error);
+    res.status(500).json({ error: 'Failed to resolve user' });
+  }
+});
+
+// POST /api/auth/demo — instant demo access (never persisted)
 router.post('/demo', (_req: Request, res: Response) => {
   const userId = uuidv4();
   const email = 'demo@sage.ai';
