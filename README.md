@@ -72,6 +72,13 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_KEY=your-service-key
 JWT_SECRET=change-this-secret
 FRONTEND_URL=http://localhost:3000
+
+# Optional tuning (defaults shown)
+RATE_LIMIT_MAX=100            # requests per window
+RATE_LIMIT_WINDOW_MS=900000   # 15 min
+MAX_MESSAGE_LENGTH=50000      # per chat message
+MAX_ATTACHMENT_BYTES=8388608  # 8MB per attachment
+SAGE_DEFAULT_MODEL=llama-3.3-70b-versatile
 ```
 
 **Frontend** (`frontend/.env.local`):
@@ -95,6 +102,23 @@ npm run dev
 npm run dev:backend   # http://localhost:4000
 npm run dev:frontend  # http://localhost:3000
 ```
+
+## 🧪 Testing
+
+The backend ships with a **155-test suite** (22 files) covering the intent
+pipeline, all workers, routes, middleware, and services — plus dedicated
+security, concurrency, performance, and regression suites. Coverage thresholds
+(≥90% lines/statements/functions, ≥80% branches) are enforced by CI-ready
+vitest config.
+
+```bash
+cd backend
+npm test                 # run all tests
+npm run test:coverage    # coverage report + threshold gate
+```
+
+See [`backend/TESTING.md`](backend/TESTING.md) and
+[`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md) for details.
 
 ## 📡 API Endpoints
 
