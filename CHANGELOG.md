@@ -5,13 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2026-08-06
 
 ### Added
-- API platform: API key management (create/rotate/revoke), usage tracking, per-key quotas and rate limits, audit logging, secure API-key middleware.
-- Admin platform: monitoring dashboard for users, requests, API usage, costs, system health, conversations, and logs; user disabling.
-- AI foundation: prompt orchestration, conversation memory, context window management, worker retry with backoff, pipeline observability events.
-- Production infrastructure: environment validation, graceful shutdown, structured request logging, extended health endpoint, CI workflow (build, lint, test, coverage, typecheck, audit).
+- **Commercial platform (billing-READY)**: subscription plans (Free/Pro/Team) with daily request quotas, `plans`/`subscriptions`/`invoices` tables (migration 004), per-user quota enforcement on `/api/chat` (429 + upgrade signal), API-key plan caps, billing endpoints (catalog, my plan + usage, provider-gated checkout/portal hooks).
+- **Organizations**: multi-tenant workspaces with owner/admin/member roles, email invitations, leave/remove/delete flows, per-plan organization limits (migration 004 + routes + frontend page).
+- **Plugin architecture**: typed `AgentManifest` + registry routing priority (plugin claims beat built-ins), global plugin store, `AgentFinance` scaffold (`agents/plugins/agentfinance.ts`), surfaced in `/api/agents`. Docs: `docs/PLUGIN_ARCHITECTURE.md`, `docs/AGENTFINANCE_SPEC.md`.
+- **Conversation memory**: `ConversationMemory` service (rolling window, token-aware), pipeline memory hook attaching client-supplied history as context, chat route history sanitization (role whitelist, caps), frontend Composer sends recent turns.
+- **Prompt orchestration**: `services/prompts.ts` — shared `buildSystemPrompt`/`buildUserPrompt` across General/Web/Vision workers with a unified safety preamble.
+- **Worker metrics**: per-worker runs/errors/avg-latency recorded by the pipeline and displayed in the admin dashboard.
+- **API platform**: API key management (create/rotate/revoke), usage tracking, per-key quotas and rate limits, audit logging, secure API-key middleware.
+- **Admin platform**: monitoring dashboard for users, requests, API usage, costs, system health, conversations, and logs; user disabling.
+- **Production infrastructure**: environment validation, graceful shutdown, structured request logging, extended health endpoint, CI workflow (build, lint, test, coverage, typecheck, audit).
+
+### Changed
+- Engine version reported as **SAGE v7.1** (`APP_VERSION`).
+- `AgentRegistry.lookup` accepts an optional domain and consults registered plugins first.
+- `/api/agents` now returns `plugins` alongside built-in agents.
+- The vision/web workers consume conversation memory context; all workers use the shared prompt builders.
+- Sidebar/settings display SAGE v7.1; new Organizations and Billing pages added to navigation.
+
+### Security
+- Chat history is untrusted input: capped (40 turns, 4000 chars/turn) and role-whitelisted before entering the prompt.
+- Plan quotas enforced server-side (chat + API keys + organizations); demo mode applies the Free tier.
+
+## [Unreleased]
+
+### Planned
+- Payment provider (Stripe) integration via the checkout/webhook contract.
+- AgentFinance worker implementation (finance data provider + premium gate).
 
 ## [1.0.0-beta] - 2026-08-05
 
