@@ -229,7 +229,7 @@ export function SettingsPage() {
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div className="p-3 rounded-xl bg-sage-card/50 border border-sage-border/50">
             <div className="text-[10px] font-bold tracking-wider text-txt-muted uppercase mb-1">Version</div>
-            <div className="font-mono text-txt-primary">SAGE v7.0</div>
+            <div className="font-mono text-txt-primary">SAGE v7.1</div>
           </div>
           <div className="p-3 rounded-xl bg-sage-card/50 border border-sage-border/50">
             <div className="text-[10px] font-bold tracking-wider text-txt-muted uppercase mb-1">Model</div>
