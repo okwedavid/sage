@@ -11,6 +11,9 @@ import { DashboardPage } from '@/components/pages/DashboardPage';
 import { ChatPage } from '@/components/pages/ChatPage';
 import { AgentsPage } from '@/components/pages/AgentsPage';
 import { SettingsPage } from '@/components/pages/SettingsPage';
+import { AdminPage } from '@/components/pages/AdminPage';
+import { OrganizationsPage } from '@/components/pages/OrganizationsPage';
+import { BillingPage } from '@/components/pages/BillingPage';
 import { LoginPage } from '@/components/pages/LoginPage';
 
 export default function Home() {
@@ -48,6 +51,9 @@ export default function Home() {
       {currentPage === 'memory' && <PlaceholderPage title="Memory" subtitle="Coming in Sprint 7 — Conversation Memory + RAG" />}
       {currentPage === 'tools' && <PlaceholderPage title="Tools" subtitle="Coming in Sprint 8 — Advanced Tool Integrations" />}
       {currentPage === 'settings' && <SettingsPage />}
+      {currentPage === 'admin' && <AdminPage />}
+      {currentPage === 'organizations' && <OrganizationsPage />}
+      {currentPage === 'billing' && <BillingPage />}
     </DashboardLayout>
   );
 }

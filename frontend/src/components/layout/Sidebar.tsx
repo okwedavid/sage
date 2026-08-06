@@ -12,6 +12,9 @@ import {
   BrainCircuit,
   Wrench,
   Settings,
+  ShieldCheck,
+  Building2,
+  CreditCard,
   Plus,
   LogOut,
   X,
@@ -23,6 +26,9 @@ const NAV_ITEMS = [
   { id: 'agents', label: 'Agents', icon: Bot },
   { id: 'memory', label: 'Memory', icon: BrainCircuit },
   { id: 'tools', label: 'Tools', icon: Wrench },
+  { id: 'organizations', label: 'Organizations', icon: Building2 },
+  { id: 'billing', label: 'Billing', icon: CreditCard },
+  { id: 'admin', label: 'Admin', icon: ShieldCheck },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
@@ -124,7 +130,7 @@ export function Sidebar() {
               </div>
               <div className="flex justify-between">
                 <span className="text-txt-secondary">Version</span>
-                <span className="font-mono text-txt-primary">SAGE v7.0</span>
+                <span className="font-mono text-txt-primary">SAGE v7.1</span>
               </div>
             </div>
           </div>

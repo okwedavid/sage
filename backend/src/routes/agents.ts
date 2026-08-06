@@ -4,6 +4,7 @@
  */
 import { Router, Request, Response } from 'express';
 import { Settings } from '../config/settings';
+import { listPluginManifests } from '../agents/plugin';
 
 const router = Router();
 
@@ -47,7 +48,11 @@ const AGENTS = [
 
 // GET /api/agents
 router.get('/', (_req: Request, res: Response) => {
-  res.json({ agents: AGENTS });
+  res.json({
+    agents: AGENTS,
+    // Plugin agents (see agents/plugin.ts + docs/PLUGIN_ARCHITECTURE.md).
+    plugins: listPluginManifests(),
+  });
 });
 
 // GET /api/agents/status
@@ -58,6 +63,7 @@ router.get('/status', (_req: Request, res: Response) => {
     apiKey: Settings.getMaskedKey(),
     validated: Settings.validate(),
     agents: AGENTS.filter((a) => a.status === 'active').map((a) => a.name),
+    plugins: listPluginManifests().map((p) => ({ id: p.id, name: p.name, status: p.status, version: p.version })),
     uptime: process.uptime(),
     memory: process.memoryUsage(),
   });

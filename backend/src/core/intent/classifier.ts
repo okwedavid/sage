@@ -7,6 +7,7 @@ import Groq from 'groq-sdk';
 import { TaskType, Priority, Status, OutputFormat } from '../enums';
 import { IntentSchema, createIntent } from './schemas';
 import { Settings } from '../../config/settings';
+import { withRetry } from '../../services/retry';
 
 const CLASSIFIER_PROMPT = `You are SAGE-Classifier, a highly precise intent recognition engine.
 Your ONLY job is to analyze user input and convert it into structured JSON.
@@ -51,16 +52,24 @@ export class IntentClassifier {
 
   async classify(textInput: string): Promise<IntentSchema> {
     try {
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        messages: [
-          { role: 'system', content: CLASSIFIER_PROMPT },
-          { role: 'user', content: `Classify this intent:\n\n${textInput}` },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.1,
-        max_tokens: 300,
-      });
+      const response = await withRetry(
+        () =>
+          this.client.chat.completions.create(
+            {
+              model: this.model,
+              messages: [
+                { role: 'system', content: CLASSIFIER_PROMPT },
+                { role: 'user', content: `Classify this intent:\n\n${textInput}` },
+              ],
+              response_format: { type: 'json_object' },
+              temperature: 0.1,
+              max_tokens: 300,
+            },
+            // A hung model call must never hang the request indefinitely.
+            { signal: AbortSignal.timeout(Settings.GROQ_TIMEOUT_MS) }
+          ),
+        { attempts: 2 }
+      );
 
       const raw = response.choices[0].message.content || '{}';
       const data = JSON.parse(raw);
@@ -80,11 +89,18 @@ export class IntentClassifier {
         ? (prio as Priority)
         : Priority.NORMAL;
 
+      // Clamp confidence to [0,1] — a rogue/malformed model response must not
+      // crash createIntent (which rejects out-of-range values).
+      const rawConfidence = parseFloat(data.confidence_score);
+      const confidenceScore = Number.isFinite(rawConfidence)
+        ? Math.min(1, Math.max(0, rawConfidence))
+        : 0.85;
+
       return createIntent({
         inputText: textInput,
         taskType: taskTypeStr as TaskType,
         targetDomain: data.target_domain || 'General',
-        confidenceScore: parseFloat(data.confidence_score) || 0.85,
+        confidenceScore,
         goal: data.summary || '',
         priority: validPriority,
         entities: data.entities || {},

@@ -6,6 +6,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 interface ChatRequest {
   message: string;
   attachments?: Record<string, any>;
+  history?: { role: 'user' | 'assistant'; content: string }[];
 }
 
 interface ChatResponse {
@@ -31,7 +32,12 @@ async function apiFetch(path: string, options: RequestInit = {}) {
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Request failed' }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    const error: any = new Error(err.error || `HTTP ${res.status}`);
+    // Attach the structured body + status so callers can render rich errors
+    // (e.g. the billing checkout 501 contract: { code, message, requiredEnv }).
+    error.body = err;
+    error.status = res.status;
+    throw error;
   }
   return res.json();
 }
@@ -98,5 +104,103 @@ export const api = {
 
   async getAgentStatus() {
     return apiFetch('/api/agents/status');
+  },
+
+  // API keys (platform)
+  async listApiKeys() {
+    return apiFetch('/api/keys');
+  },
+
+  async createApiKey(name?: string, scopes?: string[]) {
+    return apiFetch('/api/keys', { method: 'POST', body: JSON.stringify({ name, scopes }) });
+  },
+
+  async rotateApiKey(id: string) {
+    return apiFetch(`/api/keys/${id}/rotate`, { method: 'POST', body: JSON.stringify({}) });
+  },
+
+  async revokeApiKey(id: string) {
+    return apiFetch(`/api/keys/${id}`, { method: 'DELETE' });
+  },
+
+  // Organizations (multi-tenant workspaces)
+  async listOrganizations() {
+    return apiFetch('/api/organizations');
+  },
+
+  async createOrganization(name: string) {
+    return apiFetch('/api/organizations', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+  },
+
+  async getOrganization(id: string) {
+    return apiFetch(`/api/organizations/${id}`);
+  },
+
+  async renameOrganization(id: string, name: string) {
+    return apiFetch(`/api/organizations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    });
+  },
+
+  async inviteMember(orgId: string, email: string, role?: string) {
+    return apiFetch(`/api/organizations/${orgId}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    });
+  },
+
+  async removeMember(orgId: string, userId: string) {
+    return apiFetch(`/api/organizations/${orgId}/members/${userId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async leaveOrganization(orgId: string) {
+    return apiFetch(`/api/organizations/${orgId}/leave`, { method: 'POST' });
+  },
+
+  async deleteOrganization(orgId: string) {
+    return apiFetch(`/api/organizations/${orgId}`, { method: 'DELETE' });
+  },
+
+  // Billing
+  async getBillingPlans() {
+    return apiFetch('/api/billing/plans');
+  },
+
+  async getBillingPlan() {
+    return apiFetch('/api/billing/plan');
+  },
+
+  async requestCheckout(planId: string) {
+    return apiFetch('/api/billing/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ planId }),
+    });
+  },
+
+  // Admin
+  async adminSummary() {
+    return apiFetch('/api/admin/summary');
+  },
+
+  async adminUsers() {
+    return apiFetch('/api/admin/users');
+  },
+
+  async adminBanUser(id: string, banned: boolean) {
+    return apiFetch(`/api/admin/users/${id}/ban`, { method: 'POST', body: JSON.stringify({ banned }) });
+  },
+
+  async adminConversations() {
+    return apiFetch('/api/admin/conversations');
+  },
+
+  async adminLogs() {
+    return apiFetch('/api/admin/logs');
   },
 };

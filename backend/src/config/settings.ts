@@ -5,7 +5,16 @@
  * FORBIDDEN: Business logic
  */
 import dotenv from 'dotenv';
+
+// Load .env (dev defaults), then .env.production to fill gaps when in production.
+// dotenv never overrides variables already present in process.env, so injected
+// env vars (Railway/Vercel) always take precedence over committed files.
+// Skipped under vitest (VITEST is set) so tests never absorb a local
+// .env.production file's secrets into process.env (test hermeticity).
 dotenv.config();
+if (process.env.NODE_ENV === 'production' && !process.env.VITEST) {
+  dotenv.config({ path: '.env.production' });
+}
 
 export const Settings = {
   // Server
@@ -29,12 +38,32 @@ export const Settings = {
   JWT_SECRET: process.env.JWT_SECRET || 'sage-dev-secret',
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
 
+  // Rate limiting (guarded so invalid/zero env values can't disable or brick the limiter)
+  RATE_LIMIT_MAX: Math.max(1, parseInt(process.env.RATE_LIMIT_MAX || '100', 10) || 100),
+  RATE_LIMIT_WINDOW_MS: Math.max(
+    1000,
+    parseInt(process.env.RATE_LIMIT_WINDOW_MS || String(15 * 60 * 1000), 10) || 15 * 60 * 1000
+  ),
+  // Stricter per-route limiter for auth endpoints (login/register brute-force)
+  LOGIN_RATE_LIMIT_MAX: Math.max(1, parseInt(process.env.LOGIN_RATE_LIMIT_MAX || '10', 10) || 10),
+  LOGIN_RATE_LIMIT_WINDOW_MS: Math.max(
+    1000,
+    parseInt(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || String(60 * 1000), 10) || 60 * 1000
+  ),
+
+  // Groq LLM timeout (ms) — a hung model call must never hang the HTTP request
+  GROQ_TIMEOUT_MS: Math.max(1000, parseInt(process.env.GROQ_TIMEOUT_MS || '30000', 10) || 30000),
+
+  // Input limits (security)
+  MAX_MESSAGE_LENGTH: parseInt(process.env.MAX_MESSAGE_LENGTH || '50000', 10),
+  MAX_ATTACHMENT_BYTES: parseInt(process.env.MAX_ATTACHMENT_BYTES || String(8 * 1024 * 1024), 10),
+
   // Pipeline
   CONFIDENCE_THRESHOLD: 0.4,
 
   // App Meta
   APP_NAME: 'SAGE',
-  APP_VERSION: '7.0',
+  APP_VERSION: '7.1',
   APP_TAGLINE: 'Systemic Agentic General Engine',
 
   validate(): boolean {
@@ -45,5 +74,27 @@ export const Settings = {
     const key = this.GROQ_API_KEY;
     if (key.length > 8) return `${key.slice(0, 6)}...${key.slice(-4)}`;
     return 'NOT SET';
+  },
+
+  /**
+   * Returns a list of configuration problems that must be fixed before a
+   * production boot. Empty array = safe to start. Called by the bootstrap
+   * guard in index.ts (production only).
+   */
+  assertProductionSafe(): string[] {
+    const problems: string[] = [];
+    if (this.JWT_SECRET === 'sage-dev-secret' || this.JWT_SECRET.length < 24) {
+      problems.push('JWT_SECRET must be a strong random secret (default dev secret refused in production)');
+    }
+    if (!this.GROQ_API_KEY.startsWith('gsk_')) {
+      problems.push('GROQ_API_KEY is missing or invalid (must start with gsk_)');
+    }
+    if (Boolean(this.SUPABASE_URL) !== Boolean(this.SUPABASE_SERVICE_KEY)) {
+      problems.push('SUPABASE_URL and SUPABASE_SERVICE_KEY must be set together');
+    }
+    if (this.FRONTEND_URL.includes('localhost')) {
+      problems.push('FRONTEND_URL must be the deployed frontend origin in production');
+    }
+    return problems;
   },
 } as const;

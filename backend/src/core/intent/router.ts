@@ -5,7 +5,7 @@
  */
 import { IntentSchema, advanceStatus } from './schemas';
 import { Status } from '../enums';
-import { AgentRegistry, WorkerResult } from '../../agents/registry';
+import { AgentRegistry } from '../../agents/registry';
 
 export class IntentRouter {
   constructor(private registry: AgentRegistry) {}
@@ -26,7 +26,7 @@ export class IntentRouter {
     }
 
     // Priority 2: Normal routing
-    const { worker, name } = this.registry.lookup(intent.taskType, intent.outputFormat);
+    const { worker, name } = this.registry.lookup(intent.taskType, intent.outputFormat, intent.targetDomain);
     const updated = { ...advanceStatus(intent, Status.ROUTED), suggestedAgent: name };
     console.log(`🔀 [Router] → ${name}`);
     return { worker, agentName: name, updatedIntent: updated };

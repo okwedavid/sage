@@ -6,10 +6,43 @@ import { Router, Request, Response } from 'express';
 import { IntentPipeline } from '../core/intent';
 import { AgentRegistry, GeneralWorker, WebWorker, VisionWorker } from '../agents';
 import { Settings } from '../config/settings';
-import { AuthRequest, optionalAuth } from '../middleware/auth';
+import { AuthRequest } from '../middleware/auth';
+import { jwtOrApiKey, ApiKeyRequest } from '../middleware/api-key';
 import { intentToDict } from '../core/intent/schemas';
+import { isSupabaseConfigured, pingSupabase, recordUsage } from '../services/supabase';
+import { metrics } from '../services/metrics';
+import { ConversationMemory } from '../services/context';
+import { enforceChatQuota, recordChatUsage } from '../services/billing';
 
 const router = Router();
+
+// ── Attachment validation ──
+// image_base64 must be a base64 string within the configured size limit;
+// metadata fields must be strings.
+function validateAttachments(attachments: Record<string, any>): string | null {
+  if (attachments === null || typeof attachments !== 'object' || Array.isArray(attachments)) {
+    return 'Attachments must be an object';
+  }
+
+  for (const [key, value] of Object.entries(attachments)) {
+    if (key === 'image_base64') {
+      if (typeof value !== 'string' || value.length === 0) {
+        return 'image_base64 must be a non-empty string';
+      }
+      if (!/^[A-Za-z0-9+/=\s]*$/.test(value)) {
+        return 'image_base64 contains invalid characters';
+      }
+      const approxBytes = (value.length * 3) / 4;
+      if (approxBytes > Settings.MAX_ATTACHMENT_BYTES) {
+        return `Attachment too large (max ${Math.round(Settings.MAX_ATTACHMENT_BYTES / (1024 * 1024))}MB)`;
+      }
+    } else if (value !== undefined && typeof value !== 'string') {
+      return `Attachment '${key}' must be a string`;
+    }
+  }
+
+  return null;
+}
 
 // Pipeline cache (keyed by config)
 const pipelineCache = new Map<string, IntentPipeline>();
@@ -43,12 +76,29 @@ function getPipeline(apiKey: string, customModel?: string): IntentPipeline {
 }
 
 // POST /api/chat — process a message through the pipeline
-router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
+router.post('/', jwtOrApiKey, async (req: AuthRequest & ApiKeyRequest, res: Response) => {
   try {
-    const { message, attachments = {}, customApiKey, customModel } = req.body;
+    const { message, attachments = {}, customApiKey, customModel, history } = req.body;
+
+    if (message !== undefined && typeof message !== 'string') {
+      res.status(400).json({ error: 'Message must be a string' });
+      return;
+    }
 
     if (!message?.trim() && Object.keys(attachments).length === 0) {
       res.status(400).json({ error: 'Message or attachment required' });
+      return;
+    }
+
+    if (typeof message === 'string' && message.length > Settings.MAX_MESSAGE_LENGTH) {
+      res.status(400).json({ error: `Message too long (max ${Settings.MAX_MESSAGE_LENGTH} chars)` });
+      return;
+    }
+
+    // Validate attachments before they reach the pipeline
+    const invalidAttachment = validateAttachments(attachments);
+    if (invalidAttachment) {
+      res.status(400).json({ error: invalidAttachment });
       return;
     }
 
@@ -62,9 +112,65 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    // Plan gate: ALL authenticated clients (JWT sessions AND API-key callers)
+    // are metered against the subscription tier. API-key clients additionally
+    // carry their own per-key quota (enforced in the api-key middleware), so
+    // the tighter of the two limits applies. Custom (user-supplied) Groq keys
+    // do not bypass the tier.
+    if (req.userId) {
+      const quota = await enforceChatQuota(req.userId);
+      if (!quota.ok) {
+        res.status(429).json({
+          error: `Daily request limit reached for your ${quota.planId === 'free' ? 'Free' : 'current'} plan (${quota.limit}/day). Upgrade to continue.`,
+          code: 'plan_quota_exceeded',
+          plan: quota.planId,
+          limit: quota.limit,
+          upgrade: true,
+        });
+        return;
+      }
+    }
+
     // Create pipeline with custom config if needed
     const pipe = getPipeline(apiKey, customModel);
-    const result = await pipe.process(message || '[Image attached] Analyze this image', attachments);
+    const started = Date.now();
+
+    // Build a memory context block from client-supplied history (if any).
+    // Clients send the last N turns; ConversationMemory truncates to a budget.
+    // History is untrusted input: entries and per-turn content are capped so a
+    // hostile client cannot inflate the prompt (MAX_MESSAGE_LENGTH only caps
+    // the `message` field).
+    const MAX_MEMORY_TURNS = 40;
+    const MAX_MEMORY_TURN_CHARS = 4000;
+    const recent = Array.isArray(history) ? history.slice(-MAX_MEMORY_TURNS) : [];
+    let memoryBlock: string | undefined;
+    if (recent.length > 0) {
+      const mem = new ConversationMemory(20);
+      for (const turn of recent) {
+        if (turn && (turn.role === 'user' || turn.role === 'assistant') && typeof turn.content === 'string') {
+          mem.add(turn.role, turn.content.slice(0, MAX_MEMORY_TURN_CHARS));
+        }
+      }
+      memoryBlock = mem.buildContext({ maxTokens: 800, maxTurns: 12 });
+    }
+
+    if (req.userId) {
+      recordChatUsage(req.userId);
+    }
+
+    const result = await pipe.process(message || '[Image attached] Analyze this image', attachments, memoryBlock);
+
+    // Async usage tracking (never blocks the response). API-key callers were
+    // already recorded by the api-key middleware — skip to avoid double rows.
+    if (!req.apiKey) {
+      recordUsage({
+        userId: req.userId || null,
+        endpoint: '/api/chat',
+        model: customModel || Settings.DEFAULT_MODEL,
+        statusCode: result.success ? 200 : 200,
+        latencyMs: Date.now() - started,
+      }).catch(() => {});
+    }
 
     res.json({
       success: result.success,
@@ -80,14 +186,23 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// GET /api/chat/health
-router.get('/health', (_req: Request, res: Response) => {
+// GET /api/chat/health — extended with dependency + metric probes
+router.get('/health', async (_req: Request, res: Response) => {
+  const supabaseReady = isSupabaseConfigured();
+  const supabaseOk = supabaseReady ? await pingSupabase() : false;
+
   res.json({
     status: 'ok',
     engine: 'SAGE v' + Settings.APP_VERSION,
     model: Settings.DEFAULT_MODEL,
     api_key: Settings.getMaskedKey(),
     uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    deps: {
+      groq: Settings.validate() ? 'ok' : 'missing',
+      supabase: supabaseReady ? (supabaseOk ? 'ok' : 'unreachable') : 'unconfigured',
+    },
+    metrics: metrics.snapshot(),
   });
 });
 

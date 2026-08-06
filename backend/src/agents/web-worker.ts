@@ -8,6 +8,9 @@ import * as cheerio from 'cheerio';
 import { BaseWorker } from './base-worker';
 import { IntentSchema } from '../core/intent/schemas';
 import { Settings } from '../config/settings';
+import { withRetry } from '../services/retry';
+import { buildSystemPrompt } from '../services/prompts';
+import { TaskType } from '../core/enums';
 
 export class WebWorker implements BaseWorker {
   private client: Groq;
@@ -67,21 +70,31 @@ export class WebWorker implements BaseWorker {
     }
 
     try {
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are SAGE-WebAnalyst, a web intelligence specialist. Analyze web content deeply. Structure your answer with: Summary, Key Insights, Detailed Analysis. Use markdown with headers and bullets.',
-          },
-          {
-            role: 'user',
-            content: `USER QUESTION: ${intent.inputText}\n\nSOURCE URL: ${url}\n\nPAGE CONTENT:\n${content}\n\nTask: Provide Web Intelligence Report.`,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 1500,
-      });
+      const response = await withRetry(
+        () =>
+          this.client.chat.completions.create(
+            {
+              model: this.model,
+              messages: [
+                {
+                  role: 'system',
+                  content: buildSystemPrompt(
+                    TaskType.RESEARCH,
+                    'You are SAGE-WebAnalyst, a web intelligence specialist. Analyze web content deeply. Structure your answer with: Summary, Key Insights, Detailed Analysis. Use markdown with headers and bullets.'
+                  ),
+                },
+                {
+                  role: 'user',
+                  content: `${intent.context ? `ADDITIONAL CONTEXT:\n${intent.context}\n\n` : ''}USER QUESTION: ${intent.inputText}\n\nSOURCE URL: ${url}\n\nPAGE CONTENT:\n${content}\n\nTask: Provide Web Intelligence Report.`,
+                },
+              ],
+              temperature: 0.3,
+              max_tokens: 1500,
+            },
+            { signal: AbortSignal.timeout(Settings.GROQ_TIMEOUT_MS) }
+          ),
+        { attempts: 2 }
+      );
 
       const answer = response.choices[0].message.content || '';
       return `🌐 **Source:** [${url}](${url})\n\n---\n\n${answer}`;
@@ -92,15 +105,28 @@ export class WebWorker implements BaseWorker {
 
   private async fallback(intent: IntentSchema): Promise<string> {
     try {
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        messages: [
-          { role: 'system', content: 'You are SAGE research assistant. Provide structured factual reports.' },
-          { role: 'user', content: intent.inputText },
-        ],
-        temperature: 0.7,
-        max_tokens: Settings.MAX_TOKENS,
-      });
+      const response = await withRetry(
+        () =>
+          this.client.chat.completions.create(
+            {
+              model: this.model,
+              messages: [
+                {
+                  role: 'system',
+                  content: buildSystemPrompt(
+                    TaskType.RESEARCH,
+                    'You are SAGE research assistant. Provide structured factual reports.'
+                  ),
+                },
+                { role: 'user', content: intent.context ? `${intent.context}\n\n${intent.inputText}` : intent.inputText },
+              ],
+              temperature: 0.7,
+              max_tokens: Settings.MAX_TOKENS,
+            },
+            { signal: AbortSignal.timeout(Settings.GROQ_TIMEOUT_MS) }
+          ),
+        { attempts: 2 }
+      );
       return response.choices[0].message.content || '';
     } catch (error: any) {
       return `[WebWorker Fallback ERROR] ${error.message}`;

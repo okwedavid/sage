@@ -8,9 +8,17 @@ import { IntentNormalizer } from './normalizer';
 import { IntentClassifier } from './classifier';
 import { IntentValidator } from './validator';
 import { IntentRouter } from './router';
-import { IntentSchema, intentToDict } from './schemas';
+import { IntentSchema } from './schemas';
 import { Status } from '../enums';
 import { AgentRegistry } from '../../agents/registry';
+import { metrics } from '../../services/metrics';
+
+// Workers signal failure by prefixing their reply with one of these markers
+// (see general/web/vision workers). Used to classify execution success for
+// metrics without throwing through the pipeline. Narrow patterns avoid false
+// positives for legitimate replies that merely begin with a warning glyph.
+const WORKER_ERROR_PREFIX =
+  /^(❌ \[|⚠️ \*\*Vision Analysis Unavailable\*\*|⚠️ Could not fetch|\[[^\]]*ERROR\])/;
 
 export interface PipelineStage {
   name: string;
@@ -42,7 +50,8 @@ export class IntentPipeline {
 
   async process(
     rawInput: string,
-    attachments: Record<string, any> = {}
+    attachments: Record<string, any> = {},
+    memory?: string
   ): Promise<PipelineResult> {
     const result: PipelineResult = {
       intent: null,
@@ -62,6 +71,11 @@ export class IntentPipeline {
       // Stage 2: Classify
       console.log('🧠 [Stage 2/5] Classifying...');
       let intent = await this.classifier.classify(clean);
+      // Memory hook: attach conversation history to the intent so workers can
+      // use it as context (recency-aware, pre-truncated by the caller).
+      if (memory && memory.trim()) {
+        intent = { ...intent, context: memory.trim() };
+      }
       result.stages.push({
         name: 'classify',
         success: true,
@@ -98,7 +112,19 @@ export class IntentPipeline {
       // Stage 5: Execute
       console.log(`⚡ [Stage 5/5] Executing via ${agentName}...`);
       intent = { ...intent, status: Status.EXECUTING };
-      const responseText = await worker.execute(intent);
+
+      // Record per-worker execution metrics (latency + success). Failures that
+      // throw are counted as errors; error-prefixed replies are counted too.
+      const executeStarted = Date.now();
+      let responseText: string;
+      try {
+        responseText = await worker.execute(intent);
+      } catch (error: any) {
+        metrics.recordWorker(agentName, false, Date.now() - executeStarted);
+        throw error;
+      }
+      metrics.recordWorker(agentName, !WORKER_ERROR_PREFIX.test(responseText), Date.now() - executeStarted);
+
       intent = { ...intent, status: Status.COMPLETED };
       result.stages.push({ name: 'execute', success: true, detail: 'DONE' });
 
