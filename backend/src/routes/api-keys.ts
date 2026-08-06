@@ -15,7 +15,8 @@ import {
   revokeKey,
   rotateKey,
 } from '../services/api-keys';
-import { isSupabaseConfigured, recordAudit } from '../services/supabase';
+import { recordAudit } from '../services/supabase';
+import { getEffectivePlan } from '../services/billing';
 
 const router = Router();
 router.use(authMiddleware);
@@ -64,11 +65,28 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    // Plan gates: a user may hold at most plan.maxApiKeys active keys, and a
+    // key's daily quota may not exceed the plan's daily request limit (prevents
+    // minting many keys to bypass the tier). The tighter limit wins.
+    const existing = await listKeys(req.userId!);
+    const activeCount = existing.filter((k) => k.status === 'active').length;
+    const { plan } = await getEffectivePlan(req.userId!);
+    if (activeCount >= plan.maxApiKeys) {
+      res.status(429).json({
+        error: `Your ${plan.name} plan allows up to ${plan.maxApiKeys} active API keys. Upgrade to create more.`,
+        upgrade: true,
+        plan: plan.id,
+      });
+      return;
+    }
+    const planDailyLimit = plan.dailyRequestLimit; // 0 = unlimited
+    const effectiveQuota = planDailyLimit > 0 ? Math.min(quotaPerDay || planDailyLimit, planDailyLimit) : quotaPerDay;
+
     const created = await createKey({
       userId: req.userId!,
       name,
       scopes,
-      quotaPerDay,
+      quotaPerDay: effectiveQuota,
       expiresAt,
     });
 

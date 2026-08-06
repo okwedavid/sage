@@ -12,6 +12,7 @@ import { intentToDict } from '../core/intent/schemas';
 import { isSupabaseConfigured, pingSupabase, recordUsage } from '../services/supabase';
 import { metrics } from '../services/metrics';
 import { ConversationMemory } from '../services/context';
+import { enforceChatQuota, recordChatUsage } from '../services/billing';
 
 const router = Router();
 
@@ -111,6 +112,25 @@ router.post('/', jwtOrApiKey, async (req: AuthRequest & ApiKeyRequest, res: Resp
       return;
     }
 
+    // Plan gate: ALL authenticated clients (JWT sessions AND API-key callers)
+    // are metered against the subscription tier. API-key clients additionally
+    // carry their own per-key quota (enforced in the api-key middleware), so
+    // the tighter of the two limits applies. Custom (user-supplied) Groq keys
+    // do not bypass the tier.
+    if (req.userId) {
+      const quota = await enforceChatQuota(req.userId);
+      if (!quota.ok) {
+        res.status(429).json({
+          error: `Daily request limit reached for your ${quota.planId === 'free' ? 'Free' : 'current'} plan (${quota.limit}/day). Upgrade to continue.`,
+          code: 'plan_quota_exceeded',
+          plan: quota.planId,
+          limit: quota.limit,
+          upgrade: true,
+        });
+        return;
+      }
+    }
+
     // Create pipeline with custom config if needed
     const pipe = getPipeline(apiKey, customModel);
     const started = Date.now();
@@ -134,16 +154,23 @@ router.post('/', jwtOrApiKey, async (req: AuthRequest & ApiKeyRequest, res: Resp
       memoryBlock = mem.buildContext({ maxTokens: 800, maxTurns: 12 });
     }
 
+    if (req.userId) {
+      recordChatUsage(req.userId);
+    }
+
     const result = await pipe.process(message || '[Image attached] Analyze this image', attachments, memoryBlock);
 
-    // Async usage tracking (never blocks the response)
-    recordUsage({
-      userId: req.userId || null,
-      endpoint: '/api/chat',
-      model: customModel || Settings.DEFAULT_MODEL,
-      statusCode: result.success ? 200 : 200,
-      latencyMs: Date.now() - started,
-    }).catch(() => {});
+    // Async usage tracking (never blocks the response). API-key callers were
+    // already recorded by the api-key middleware — skip to avoid double rows.
+    if (!req.apiKey) {
+      recordUsage({
+        userId: req.userId || null,
+        endpoint: '/api/chat',
+        model: customModel || Settings.DEFAULT_MODEL,
+        statusCode: result.success ? 200 : 200,
+        latencyMs: Date.now() - started,
+      }).catch(() => {});
+    }
 
     res.json({
       success: result.success,

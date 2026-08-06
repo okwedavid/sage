@@ -12,12 +12,17 @@ vi.hoisted(() => {
 
 import app from '../index';
 import { Settings } from '../config/settings';
+import { setSubscriptionForTesting } from '../services/billing';
 
 function authToken(userId: string): string {
   return jwt.sign({ userId, email: 'tester@sage.dev' }, Settings.JWT_SECRET, { expiresIn: '1h' });
 }
 
 const USER_ID = 'route-user-1';
+// These tests create several keys for one user; the Free plan caps active keys
+// at 3, so give the test user the Pro tier (20 keys) to keep them focused on
+// the key lifecycle rather than plan limits.
+setSubscriptionForTesting(USER_ID, 'pro');
 
 describe('POST /api/keys', () => {
   it('requires authentication', async () => {
@@ -57,6 +62,39 @@ describe('POST /api/keys', () => {
         body: JSON.stringify({ quotaPerDay: 0 }),
       });
       expect(badQuota.status).toBe(400);
+
+      const badName = await jsonFetch(`${baseUrl}/api/keys`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${authToken(USER_ID)}` },
+        body: JSON.stringify({ name: 42 }),
+      });
+      expect(badName.status).toBe(400);
+    });
+  });
+
+  it('enforces the Free plan key limit (3 active keys)', async () => {
+    await withServer(app, async (baseUrl) => {
+      // A fresh Free-tier user (this file's shared user is Pro).
+      const freeToken = authToken('free-plan-user');
+      const headers = { Authorization: `Bearer ${freeToken}` };
+
+      for (let i = 0; i < 3; i++) {
+        const ok = await jsonFetch(`${baseUrl}/api/keys`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ name: `Key ${i}` }),
+        });
+        expect(ok.status).toBe(201);
+      }
+
+      const fourth = await jsonFetch(`${baseUrl}/api/keys`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name: 'Key 4' }),
+      });
+      expect(fourth.status).toBe(429);
+      expect(fourth.body.upgrade).toBe(true);
+      expect(fourth.body.error).toContain('Free');
     });
   });
 });
@@ -113,6 +151,24 @@ describe('POST /api/keys/:id/rotate', () => {
         body: JSON.stringify({}),
       });
       expect(res.status).toBe(404);
+    });
+  });
+
+  it('rejects invalid scopes on rotate', async () => {
+    await withServer(app, async (baseUrl) => {
+      const headers = { Authorization: `Bearer ${authToken(USER_ID)}` };
+      const created = await jsonFetch(`${baseUrl}/api/keys`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name: 'Rotatable' }),
+      });
+
+      const res = await jsonFetch(`${baseUrl}/api/keys/${created.body.id}/rotate`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ scopes: ['god-mode'] }),
+      });
+      expect(res.status).toBe(400);
     });
   });
 });

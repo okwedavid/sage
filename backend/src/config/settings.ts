@@ -63,7 +63,7 @@ export const Settings = {
 
   // App Meta
   APP_NAME: 'SAGE',
-  APP_VERSION: '7.0',
+  APP_VERSION: '7.1',
   APP_TAGLINE: 'Systemic Agentic General Engine',
 
   validate(): boolean {

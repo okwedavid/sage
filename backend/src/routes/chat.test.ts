@@ -6,7 +6,10 @@
  * (only the classifier requests json_object).
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import jwt from 'jsonwebtoken';
 import { withServer, jsonFetch } from '../test-utils/http';
+import { recordChatUsage } from '../services/billing';
+import { Settings } from '../config/settings';
 
 const { mockGroq } = vi.hoisted(() => ({
   mockGroq: {
@@ -125,6 +128,28 @@ describe('POST /api/chat — happy paths', () => {
     });
   });
 
+  it('rejects attachments with invalid base64 characters', async () => {
+    await withServer(app, async (baseUrl) => {
+      const { status, body } = await postChat(baseUrl, {
+        message: 'analyze',
+        attachments: { image_base64: 'not!!base64!!', image_type: 'png' },
+      });
+      expect(status).toBe(400);
+      expect(body.error).toContain('invalid characters');
+    });
+  });
+
+  it('rejects non-string attachment values', async () => {
+    await withServer(app, async (baseUrl) => {
+      const { status, body } = await postChat(baseUrl, {
+        message: 'analyze',
+        attachments: { image_type: 42 },
+      });
+      expect(status).toBe(400);
+      expect(body.error).toContain('must be a string');
+    });
+  });
+
   it('uses a custom model when provided', async () => {
     await withServer(app, async (baseUrl) => {
       const { status } = await postChat(baseUrl, {
@@ -187,6 +212,37 @@ describe('POST /api/chat — happy paths', () => {
 
       const withBadKey = await postChat(baseUrl, { message: 'hello', customApiKey: 'sk-invalid' });
       expect(withBadKey.status).toBe(200); // falls back to server key
+    });
+  });
+
+  it('allows authenticated users under their plan quota', async () => {
+    const token = jwt.sign({ userId: 'quota-ok-user', email: 'ok@quota.dev' }, Settings.JWT_SECRET);
+    await withServer(app, async (baseUrl) => {
+      const { status } = await jsonFetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ message: 'hello there' }),
+      });
+      expect(status).toBe(200);
+    });
+  });
+
+  it('returns 429 for authenticated users who exceed their plan quota', async () => {
+    // Free tier = 20/day; consume the whole quota first.
+    for (let i = 0; i < 20; i++) recordChatUsage('quota-limit-user');
+    const token = jwt.sign({ userId: 'quota-limit-user', email: 'limit@quota.dev' }, Settings.JWT_SECRET);
+
+    await withServer(app, async (baseUrl) => {
+      const { status, body } = await jsonFetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ message: 'hello' }),
+      });
+      expect(status).toBe(429);
+      expect(body.code).toBe('plan_quota_exceeded');
+      expect(body.upgrade).toBe(true);
+      expect(body.plan).toBe('free');
+      expect(body.error).toContain('Daily request limit');
     });
   });
 });

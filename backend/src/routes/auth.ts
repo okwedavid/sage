@@ -11,7 +11,7 @@ import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import { v4 as uuidv4 } from 'uuid';
-import { randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
+import { randomBytes, scrypt as scryptCb, timingSafeEqual, createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 import { Settings } from '../config/settings';
 import { isSupabaseConfigured, createUser, findUserByEmail, findUserById, recordAudit } from '../services/supabase';
@@ -61,6 +61,17 @@ async function verifyPassword(password: string, stored: string): Promise<boolean
 
 // In-memory fallback user store (only when Supabase is not configured)
 const users: Map<string, { id: string; email: string; password: string; name: string; bannedUntil?: string }> = new Map();
+
+/**
+ * Demo-mode user lookup by email. Used by the organizations route to resolve
+ * invitations when Supabase is not configured (the service layer stays
+ * persistence-agnostic). Returns null when the account does not exist.
+ */
+export function findInMemoryUser(email: string): { id: string; email: string; name: string } | null {
+  const user = users.get(email.toLowerCase());
+  if (!user) return null;
+  return { id: user.id, email: user.email, name: user.name };
+}
 
 interface AuthUser {
   id: string;
@@ -216,8 +227,14 @@ router.get('/me', async (req: Request, res: Response) => {
 });
 
 // POST /api/auth/demo — instant demo access (never persisted)
-router.post('/demo', (_req: Request, res: Response) => {
-  const userId = uuidv4();
+//
+// Demo sessions share ONE quota bucket per IP (stable pseudo-userId derived
+// from the client IP). A fresh random id per call would let anyone mint
+// unlimited fresh Free-tier quotas — an obvious bypass. Demo users are not
+// persisted and cannot access admin/org APIs that require real accounts.
+router.post('/demo', (req: Request, res: Response) => {
+  const ip = clientIp(req);
+  const userId = 'demo-' + createHash('sha256').update(ip || 'local').digest('hex').slice(0, 12);
   const email = 'demo@sage.ai';
 
   const token = jwt.sign({ userId, email }, Settings.JWT_SECRET, {
