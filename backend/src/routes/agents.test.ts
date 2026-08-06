@@ -25,6 +25,19 @@ describe('GET /api/agents', () => {
       expect(general.status).toBe('active');
     });
   });
+
+  it('exposes platform plugin manifests (AgentFinance scaffold)', async () => {
+    await withServer(app, async (baseUrl) => {
+      const { status, body } = await jsonFetch(`${baseUrl}/api/agents`);
+      expect(status).toBe(200);
+      expect(Array.isArray(body.plugins)).toBe(true);
+      const finance = body.plugins.find((p: any) => p.id === 'agentfinance');
+      expect(finance).toBeDefined();
+      expect(finance.name).toBe('AgentFinance');
+      expect(finance.status).toBe('planned');
+      expect(finance.version).toBe('0.1.0');
+    });
+  });
 });
 
 describe('GET /api/agents/status', () => {

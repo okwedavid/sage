@@ -5,6 +5,7 @@
  */
 import { BaseWorker } from './base-worker';
 import { TaskType, OutputFormat } from '../core/enums';
+import { findClaimingPlugin } from './plugin';
 
 interface RegistryEntry {
   [key: string]: string;
@@ -46,7 +47,29 @@ export class AgentRegistry {
     return this.workers.get(name);
   }
 
-  lookup(taskType: TaskType, outputFormat: OutputFormat): WorkerResult {
+  /**
+   * Resolve the worker for an intent. Plugin priority: if a registered plugin
+   * claims the task type (+ domain), its worker wins. Otherwise the built-in
+   * routing table applies, with GeneralWorker as the universal fallback.
+   */
+  lookup(taskType: TaskType, outputFormat: OutputFormat, domain?: string): WorkerResult {
+    // 1) Plugin claim (extensible platform seam — see agents/plugin.ts)
+    const plugin = findClaimingPlugin(taskType, domain);
+    if (plugin) {
+      let worker = this.workers.get(plugin.manifest.id);
+      if (!worker) {
+        worker = plugin.createWorker?.();
+        if (worker) {
+          this.workers.set(plugin.manifest.id, worker);
+          console.log(`   🔌 Plugin worker instantiated: ${plugin.manifest.id}`);
+        }
+      }
+      if (worker) {
+        return { worker, name: plugin.manifest.id };
+      }
+    }
+
+    // 2) Built-in routing table
     const fmtReg = this.registry[outputFormat] || {};
     const workerName = fmtReg[taskType] || fmtReg['default'] || 'GeneralWorker';
 
