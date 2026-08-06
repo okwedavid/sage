@@ -196,7 +196,9 @@ export async function authenticateKey(
     if (!row) return null;
     row.requestsToday += 1;
     row.lastUsedAt = new Date().toISOString();
-  }    if (row.status !== 'active') return null;
+  }
+
+  if (row.status !== 'active') return null;
   if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) return null;
   if (row.expiresAt && new Date(row.expiresAt).getTime() < Date.now()) return null;
 
