@@ -7,6 +7,7 @@ interface ChatRequest {
   message: string;
   attachments?: Record<string, any>;
   history?: { role: 'user' | 'assistant'; content: string }[];
+  conversationId?: string;
 }
 
 interface ChatResponse {
@@ -15,6 +16,9 @@ interface ChatResponse {
   agent: string;
   intent: any;
   stages: any[];
+  model?: string;
+  provider?: string;
+  conversationTitle?: string | null;
   timestamp: string;
 }
 
@@ -48,14 +52,31 @@ export const api = {
     // Get custom settings from localStorage
     const customApiKey = localStorage.getItem('sage_custom_api_key');
     const customModel = localStorage.getItem('sage_custom_model');
+    // User-selected provider credential (Settings → Models & API Providers)
+    const providerId = localStorage.getItem('sage_active_provider_id');
     
     const requestBody = {
       ...req,
+      providerId: providerId || undefined,
       customApiKey: customApiKey || undefined,
       customModel: customModel || undefined,
     };
     
     return apiFetch('/api/chat', { method: 'POST', body: JSON.stringify(requestBody) });
+  },
+
+  async chatWithProvider(req: ChatRequest & { providerId?: string }): Promise<ChatResponse> {
+    const customApiKey = localStorage.getItem('sage_custom_api_key');
+    const customModel = localStorage.getItem('sage_custom_model');
+    return apiFetch('/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...req,
+        providerId: req.providerId || undefined,
+        customApiKey: customApiKey || undefined,
+        customModel: customModel || undefined,
+      }),
+    });
   },
 
   async health() {
@@ -86,6 +107,10 @@ export const api = {
     return apiFetch('/api/conversations');
   },
 
+  async getConversation(id: string) {
+    return apiFetch(`/api/conversations/${id}`);
+  },
+
   async createConversation(title: string) {
     return apiFetch('/api/conversations', {
       method: 'POST',
@@ -93,8 +118,58 @@ export const api = {
     });
   },
 
+  async updateConversationTitle(id: string, title: string) {
+    return apiFetch(`/api/conversations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title }),
+    });
+  },
+
+  async addConversationMessage(id: string, content: string, role: 'user' | 'assistant') {
+    return apiFetch(`/api/conversations/${id}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content, role }),
+    });
+  },
+
   async deleteConversation(id: string) {
     return apiFetch(`/api/conversations/${id}`, { method: 'DELETE' });
+  },
+
+  // Provider credentials (user-supplied AI API keys)
+  async getProviderCatalog() {
+    return apiFetch('/api/providers/catalog');
+  },
+
+  async listProviders() {
+    return apiFetch('/api/providers');
+  },
+
+  async connectProvider(input: {
+    provider: string;
+    apiKey: string;
+    label?: string;
+    baseUrl?: string;
+    model?: string;
+    supportsVision?: boolean;
+  }) {
+    return apiFetch('/api/providers/connect', { method: 'POST', body: JSON.stringify(input) });
+  },
+
+  async getProviderModels(id: string) {
+    return apiFetch(`/api/providers/${id}/models`);
+  },
+
+  async healthCheckProvider(id: string) {
+    return apiFetch(`/api/providers/${id}/health`, { method: 'POST', body: JSON.stringify({}) });
+  },
+
+  async updateProvider(id: string, fields: { model?: string; label?: string; supportsVision?: boolean }) {
+    return apiFetch(`/api/providers/${id}`, { method: 'PATCH', body: JSON.stringify(fields) });
+  },
+
+  async revokeProvider(id: string) {
+    return apiFetch(`/api/providers/${id}`, { method: 'DELETE' });
   },
 
   // Agents

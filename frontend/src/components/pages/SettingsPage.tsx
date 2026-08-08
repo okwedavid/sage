@@ -6,7 +6,9 @@
 import { useState, useEffect } from 'react';
 import { useAppStore } from '@/stores/appStore';
 import { motion } from 'framer-motion';
-import { Key, Volume2, Moon, Shield, Info, Save, Eye, EyeOff, Cpu } from 'lucide-react';
+import { Volume2, Moon, Shield, Info, Save, Eye, EyeOff, Cpu } from 'lucide-react';
+import { ApiKeysSection } from '@/components/settings/ApiKeysSection';
+import { ProviderSection } from '@/components/settings/ProviderSection';
 
 export function SettingsPage() {
   const { user, ttsEnabled, toggleTts, apiKey, setApiKey } = useAppStore();
@@ -20,7 +22,7 @@ export function SettingsPage() {
     const savedModel = localStorage.getItem('sage_custom_model');
     if (savedKey) setApiKey(savedKey);
     if (savedModel) setSelectedModel(savedModel);
-  }, []);
+  }, [setApiKey]);
 
   const handleSave = () => {
     localStorage.setItem('sage_custom_api_key', apiKey);
@@ -63,11 +65,21 @@ export function SettingsPage() {
         </div>
       </motion.div>
 
+      {/* Models & API Providers (Phase 2/3) */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+        <ProviderSection />
+      </motion.div>
+
+      {/* API Keys (Phase 7) */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+        <ApiKeysSection />
+      </motion.div>
+
       {/* LLM Configuration */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
+        transition={{ delay: 0.25 }}
         className="glass-card p-6"
       >
         <h2 className="font-display text-lg font-bold text-txt-primary mb-4 flex items-center gap-2">

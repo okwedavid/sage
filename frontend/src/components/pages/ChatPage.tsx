@@ -9,6 +9,7 @@ import { ChatMessage } from '@/components/chat/ChatMessage';
 import { Composer } from '@/components/chat/Composer';
 import { Inspector } from '@/components/inspector/Inspector';
 import { PipelineViz } from '@/components/chat/PipelineViz';
+import { SageLoading } from '@/components/chat/SageLoading';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, Brain } from 'lucide-react';
 
@@ -45,6 +46,8 @@ export function ChatPage() {
                 {messages.map((msg) => (
                   <ChatMessage key={msg.id} message={msg} />
                 ))}
+                {/* Sage-identity loading indicator in the response area (Phase 9) */}
+                <AnimatePresence>{isProcessing && <SageLoading />}</AnimatePresence>
                 <div ref={chatEndRef} />
               </div>
             )}
