@@ -34,6 +34,10 @@ export const Settings = {
   SUPABASE_URL: process.env.SUPABASE_URL || '',
   SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY || '',
 
+  // Provider credential encryption (user-supplied third-party AI API keys)
+  // Required in production before users can connect external providers.
+  SAGE_CREDENTIAL_ENCRYPTION_KEY: process.env.SAGE_CREDENTIAL_ENCRYPTION_KEY || '',
+
   // JWT
   JWT_SECRET: process.env.JWT_SECRET || 'sage-dev-secret',
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',

@@ -301,6 +301,38 @@ export async function deleteConversationById(userId: string, id: string): Promis
   return true;
 }
 
+/**
+ * Replace a conversation's message list (and optionally its title) in one
+ * owner-scoped update. Used by the conversation store for auto-save, message
+ * capping, and rename. Returns the updated row or null.
+ */
+export async function updateConversationContent(
+  userId: string,
+  id: string,
+  fields: { messages?: any[]; title?: string }
+): Promise<ConversationApiShape | null> {
+  const db = getSupabase();
+  if (!db) return null;
+
+  const update: Record<string, any> = { updated_at: new Date().toISOString() };
+  if (fields.messages !== undefined) update.messages = fields.messages;
+  if (fields.title !== undefined) update.title = fields.title;
+
+  const { data, error } = await db
+    .from('conversations')
+    .update(update)
+    .eq('id', id)
+    .eq('user_id', userId)
+    .select('*')
+    .single();
+
+  if (error) {
+    console.error('Failed to update conversation:', error.message);
+    return null;
+  }
+  return toConversationShape(data);
+}
+
 // Legacy helpers (kept for backward compatibility)
 export async function saveConversation(
   userId: string,
@@ -505,6 +537,139 @@ export async function recordApiKeyUsage(apiKeyId: string): Promise<void> {
       last_used_at: new Date().toISOString(),
     })
     .eq('id', apiKeyId);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Provider credentials (user-supplied third-party AI API keys)
+//
+// The `encrypted_key` column stores AES-256-GCM ciphertext produced by
+// providers/credentials.ts. Plaintext keys are NEVER persisted or returned.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ProviderCredentialRow {
+  id: string;
+  user_id: string;
+  provider: string;
+  label: string;
+  encrypted_key: string;
+  base_url: string | null;
+  model: string | null;
+  capabilities: any;
+  status: string;
+  last_checked_at: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function createProviderCredential(input: {
+  userId: string;
+  provider: string;
+  label: string;
+  encryptedKey: string;
+  baseUrl?: string;
+  model?: string;
+  capabilities?: Record<string, any>;
+}): Promise<ProviderCredentialRow | null> {
+  const db = getSupabase();
+  if (!db) return null;
+
+  const { data, error } = await db
+    .from('provider_credentials')
+    .insert({
+      user_id: input.userId,
+      provider: input.provider,
+      label: input.label,
+      encrypted_key: input.encryptedKey,
+      base_url: input.baseUrl || null,
+      model: input.model || null,
+      capabilities: input.capabilities || {},
+    })
+    .select('*')
+    .single();
+
+  if (error) {
+    console.error('Failed to create provider credential:', error.message);
+    return null;
+  }
+  return data as ProviderCredentialRow;
+}
+
+export async function listProviderCredentials(userId: string): Promise<ProviderCredentialRow[]> {
+  const db = getSupabase();
+  if (!db) return [];
+
+  const { data, error } = await db
+    .from('provider_credentials')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Failed to list provider credentials:', error.message);
+    return [];
+  }
+  return (data || []) as ProviderCredentialRow[];
+}
+
+export async function getProviderCredential(userId: string, id: string): Promise<ProviderCredentialRow | null> {
+  const db = getSupabase();
+  if (!db) return null;
+
+  const { data, error } = await db
+    .from('provider_credentials')
+    .select('*')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Failed to fetch provider credential:', error.message);
+    return null;
+  }
+  return (data as ProviderCredentialRow) || null;
+}
+
+export async function updateProviderCredential(
+  userId: string,
+  id: string,
+  fields: {
+    label?: string;
+    model?: string;
+    base_url?: string;
+    capabilities?: Record<string, any>;
+    status?: string;
+    last_error?: string | null;
+    last_checked_at?: string;
+  }
+): Promise<boolean> {
+  const db = getSupabase();
+  if (!db) return false;
+
+  const { error } = await db
+    .from('provider_credentials')
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('Failed to update provider credential:', error.message);
+    return false;
+  }
+  return true;
+}
+
+export async function deleteProviderCredential(userId: string, id: string): Promise<boolean> {
+  const db = getSupabase();
+  if (!db) return false;
+
+  const { error } = await db.from('provider_credentials').delete().eq('id', id).eq('user_id', userId);
+
+  if (error) {
+    console.error('Failed to delete provider credential:', error.message);
+    return false;
+  }
+  return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
