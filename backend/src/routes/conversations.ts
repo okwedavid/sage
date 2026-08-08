@@ -1,35 +1,36 @@
 /**
  * routes/conversations.ts
- * OWNS: Conversation CRUD endpoints
+ * OWNS: Conversation CRUD endpoints (Phase 5 — persistence, isolation,
+ * auto-titles). All persistence flows through services/conversation-store.ts,
+ * which owns the Supabase vs in-memory decision.
  *
- * Persistence: Supabase when configured, in-memory Map otherwise (local/demo).
+ * GET    /api/conversations        → list (owner only)
+ * POST   /api/conversations        → create
+ * GET    /api/conversations/:id    → fetch (owner only)
+ * POST   /api/conversations/:id/messages → append message
+ * PATCH  /api/conversations/:id    → rename
+ * DELETE /api/conversations/:id    → delete (owner only)
  */
 import { Router, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 import {
-  isSupabaseConfigured,
   createConversation,
   listConversations,
   getConversation,
-  addMessageToConversation,
-  deleteConversationById,
-} from '../services/supabase';
+  addMessages,
+  updateConversationTitle,
+  deleteConversation,
+  generateConversationTitle,
+} from '../services/conversation-store';
 
 const router = Router();
-
-// In-memory fallback store (only when Supabase is not configured)
-const conversations: Map<string, any[]> = new Map();
+router.use(authMiddleware);
 
 // GET /api/conversations
-router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/', async (req: AuthRequest, res: Response) => {
   try {
-    if (isSupabaseConfigured()) {
-      const convs = await listConversations(req.userId!);
-      res.json({ conversations: convs });
-      return;
-    }
-    res.json({ conversations: conversations.get(req.userId!) || [] });
+    const convs = await listConversations(req.userId!);
+    res.json({ conversations: convs });
   } catch (error: any) {
     console.error('List conversations error:', error);
     res.status(500).json({ error: 'Failed to list conversations' });
@@ -37,33 +38,24 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 });
 
 // POST /api/conversations
-router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/', async (req: AuthRequest, res: Response) => {
   try {
-    const { title } = req.body;
-    const safeTitle = typeof title === 'string' && title.trim() ? title.slice(0, 200) : 'New Conversation';
+    const { title, firstMessage } = req.body || {};
+    // Untitled conversations start as 'New Conversation' and are auto-titled
+    // from the first user message on the first persisted turn. Clients may
+    // also hint the initial topic via `firstMessage`.
+    const safeTitle =
+      typeof title === 'string' && title.trim()
+        ? title.slice(0, 200)
+        : typeof firstMessage === 'string' && firstMessage.trim()
+          ? generateConversationTitle(firstMessage)
+          : 'New Conversation';
 
-    if (isSupabaseConfigured()) {
-      const conv = await createConversation(req.userId!, safeTitle);
-      if (!conv) {
-        res.status(500).json({ error: 'Failed to create conversation' });
-        return;
-      }
-      res.status(201).json(conv);
+    const conv = await createConversation(req.userId!, safeTitle);
+    if (!conv) {
+      res.status(500).json({ error: 'Failed to create conversation' });
       return;
     }
-
-    // In-memory fallback
-    const conv = {
-      id: uuidv4(),
-      title: safeTitle,
-      messages: [],
-      userId: req.userId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    const userConvs = conversations.get(req.userId!) || [];
-    userConvs.unshift(conv);
-    conversations.set(req.userId!, userConvs);
     res.status(201).json(conv);
   } catch (error: any) {
     console.error('Create conversation error:', error);
@@ -72,20 +64,9 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 });
 
 // GET /api/conversations/:id
-router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/:id', async (req: AuthRequest, res: Response) => {
   try {
-    if (isSupabaseConfigured()) {
-      const conv = await getConversation(req.userId!, req.params.id);
-      if (!conv) {
-        res.status(404).json({ error: 'Conversation not found' });
-        return;
-      }
-      res.json(conv);
-      return;
-    }
-
-    const userConvs = conversations.get(req.userId!) || [];
-    const conv = userConvs.find((c) => c.id === req.params.id);
+    const conv = await getConversation(req.userId!, req.params.id);
     if (!conv) {
       res.status(404).json({ error: 'Conversation not found' });
       return;
@@ -98,32 +79,33 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
 });
 
 // POST /api/conversations/:id/messages
-router.post('/:id/messages', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/:id/messages', async (req: AuthRequest, res: Response) => {
   try {
+    const { content, role } = req.body || {};
+    if (typeof content !== 'string' || !content.trim()) {
+      res.status(400).json({ error: 'Message content is required' });
+      return;
+    }
+    const safeRole =
+      role === 'user' || role === 'assistant' ? role : role === undefined ? 'user' : null;
+    if (safeRole === null) {
+      res.status(400).json({ error: 'Message role must be user or assistant' });
+      return;
+    }
+
     const message = {
-      id: uuidv4(),
-      ...req.body,
+      id: (req.body.id as string) || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      role: safeRole,
+      content: content.slice(0, 50000),
       timestamp: new Date().toISOString(),
     };
 
-    if (isSupabaseConfigured()) {
-      const updated = await addMessageToConversation(req.userId!, req.params.id, message);
-      if (!updated) {
-        res.status(404).json({ error: 'Conversation not found' });
-        return;
-      }
-      res.status(201).json(message);
-      return;
-    }
+    const updated = await addMessages(req.userId!, req.params.id, [message]);
 
-    const userConvs = conversations.get(req.userId!) || [];
-    const conv = userConvs.find((c) => c.id === req.params.id);
-    if (!conv) {
+    if (!updated) {
       res.status(404).json({ error: 'Conversation not found' });
       return;
     }
-    conv.messages.push(message);
-    conv.updatedAt = new Date().toISOString();
     res.status(201).json(message);
   } catch (error: any) {
     console.error('Add message error:', error);
@@ -131,26 +113,34 @@ router.post('/:id/messages', authMiddleware, async (req: AuthRequest, res: Respo
   }
 });
 
-// DELETE /api/conversations/:id
-router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+// PATCH /api/conversations/:id — rename
+router.patch('/:id', async (req: AuthRequest, res: Response) => {
   try {
-    if (isSupabaseConfigured()) {
-      const ok = await deleteConversationById(req.userId!, req.params.id);
-      if (!ok) {
-        res.status(404).json({ error: 'Conversation not found' });
-        return;
-      }
-      res.json({ success: true });
+    const { title } = req.body || {};
+    if (typeof title !== 'string' || !title.trim()) {
+      res.status(400).json({ error: 'title is required' });
       return;
     }
-
-    const userConvs = conversations.get(req.userId!) || [];
-    const idx = userConvs.findIndex((c) => c.id === req.params.id);
-    if (idx === -1) {
+    const updated = await updateConversationTitle(req.userId!, req.params.id, title);
+    if (!updated) {
       res.status(404).json({ error: 'Conversation not found' });
       return;
     }
-    userConvs.splice(idx, 1);
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Rename conversation error:', error);
+    res.status(500).json({ error: 'Failed to rename conversation' });
+  }
+});
+
+// DELETE /api/conversations/:id
+router.delete('/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const ok = await deleteConversation(req.userId!, req.params.id);
+    if (!ok) {
+      res.status(404).json({ error: 'Conversation not found' });
+      return;
+    }
     res.json({ success: true });
   } catch (error: any) {
     console.error('Delete conversation error:', error);
