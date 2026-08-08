@@ -4,6 +4,77 @@ A chronological log of engineering sessions on the SAGE platform.
 
 ---
 
+## Session 2026-08-08 — Milestone v1.2: BYO Providers + Memory + Security
+
+**Branch:** `feature/v1.1-production-platform` (continued)
+
+### Phase 1 — Natural conversation / classifier
+- Added `CHAT` intent + `conversation-detector.ts`: greetings (`hello`, `hi`,
+  `hey`, `good morning`, `how are you`, combined phrases) short-circuit to a
+  deterministic conversational path and bypass the research confidence gate.
+- Strict validation preserved for genuinely ambiguous tasks; existing
+  research/web/vision routing untouched. Deterministic detector tests added.
+
+### Phase 2/3 — Custom model / API provider system + unified schema
+- `providers/` module: types, AES-256-GCM credential encryption
+  (`credentials.ts`), adapter registry + catalog (OpenAI, Anthropic, Gemini,
+  Groq, OpenRouter, OpenAI-compatible with custom `baseUrl`).
+- Unified normalization layer (`gateway.ts`) — every provider response is
+  normalized into SAGE's internal schema; the pipeline never knows the
+  provider. New providers = new adapter, no core changes.
+- `ProviderService` orchestration: connect (live validation), list (masked),
+  model discovery, health checks, select-model, revoke. Migration `005`.
+- Wired into classifier/pipeline/workers with gateway back-compat; chat route
+  accepts `providerId`. Fixed a high-severity pipeline cache bug where the
+  gateway cache was keyed only by adapter+model (credential now included).
+
+### Phase 4 — Common image analysis
+- Vision worker rewritten: attachment validation by **magic bytes** (JPEG/PNG/
+  WEBP/GIF sniffs), model capability detection (vision-capable model routing
+  on the same credential), graceful failure for text-only models.
+
+### Phase 5/6 — Conversation memory + memory button
+- Unified `conversation-store.ts` (Supabase + in-memory demo modes): auto-
+  generated titles from first message, message caps (100), sanitized turns.
+- Chat auto-persists every turn; conversations route refactored + rename
+  endpoint; frontend Sidebar lists recent sessions with reopen + new
+  conversation; Composer sends `conversationId`.
+
+### Phase 7 — User API settings
+- `ApiKeysSection` UI in Settings: create (plaintext once), masked list,
+  copy, rotate, revoke, created/status/usage. Sage-issued keys (SHA-256 at
+  rest) kept strictly separate from provider credentials. Docs in
+  `docs/API.md`.
+
+### Phase 8 — Subscription entry point
+- Header button next to the profile avatar linking to the existing Billing
+  page (billing-ready abstraction; no hardcoded payment credentials).
+
+### Phase 9 — SAGE loading experience
+- `SageLoading.tsx` — Sage-identity loading indicator rendered where the
+  response body appears; visible while processing, removed on response/error.
+
+### Phase 10 — API + security testing
+- Provider suites: credentials (encryption round-trip, tamper detection),
+  adapters (each provider, vision filtering, discovery), service (isolation,
+  masking, lifecycle), gateway (normalization, retries, malformed responses),
+  providers route (connect/list/models/health/revoke, secret-leak tests),
+  vision-worker capability routing, conversation store (titles/caps/
+  isolation/restoration), chat provider selection.
+- Suite: **479 tests / 49 files**, coverage **92.5% stmts / 80.5% branches /
+  94.25% funcs** — all thresholds met.
+
+### Phase 11 — Production safety
+- Reviewed by code-reviewer: fixed cross-user gateway cache key, combined
+  greeting patterns, request-size limits on provider connect, response size
+  bounds; redaction of provider keys in all error surfaces.
+
+### Phase 12 — Docs + delivery
+- `docs/API.md` added; README endpoints/env/architecture updated; changelog +
+  release notes updated for v1.2.
+
+---
+
 ## Session 2026-08-06 — Milestone v1.1: Commercial Platform
 
 **Branch:** `feature/v1.1-production-platform` → pushed to `origin`

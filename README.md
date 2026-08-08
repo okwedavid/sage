@@ -43,7 +43,7 @@
 | Styling   | Tailwind CSS 3, Framer Motion          |
 | State     | Zustand                                |
 | Backend   | Node.js, Express 4, TypeScript         |
-| AI Engine | Groq SDK (LPU inference)               |
+| AI Engine | Unified provider gateway (OpenAI, Anthropic, Gemini, Groq, OpenRouter, OpenAI-compatible) |
 | Database  | Supabase (PostgreSQL + Auth + Realtime) |
 | Icons     | Lucide React                           |
 | Fonts     | Inter, Space Grotesk, JetBrains Mono   |
@@ -79,7 +79,13 @@ RATE_LIMIT_WINDOW_MS=900000   # 15 min
 MAX_MESSAGE_LENGTH=50000      # per chat message
 MAX_ATTACHMENT_BYTES=8388608  # 8MB per attachment
 SAGE_DEFAULT_MODEL=llama-3.3-70b-versatile
+SAGE_CREDENTIAL_ENCRYPTION_KEY=  # 32-byte key (base64) for provider API keys; required in production
 ```
+
+> **Provider credentials**: users' third-party API keys (OpenAI, Anthropic, Gemini,
+> Groq, OpenRouter, …) are encrypted at rest with AES-256-GCM. In production you
+> **must** set `SAGE_CREDENTIAL_ENCRYPTION_KEY` (a base64-encoded 32-byte key) —
+> without it the provider feature refuses to start. See `docs/API.md`.
 
 **Frontend** (`frontend/.env.local`):
 ```env
@@ -105,8 +111,10 @@ npm run dev:frontend  # http://localhost:3000
 
 ## 🧪 Testing
 
-The backend ships with a **155-test suite** (22 files) covering the intent
-pipeline, all workers, routes, middleware, and services — plus dedicated
+The backend ships with a **479-test suite** (49 files) covering the intent
+pipeline (including greeting/CHAT classification), the provider system
+(credential encryption, adapters, model discovery, isolation), conversation
+memory, image analysis, and all routes/middleware/services — plus dedicated
 security, concurrency, performance, and regression suites. Coverage thresholds
 (≥90% lines/statements/functions, ≥80% branches) are enforced by CI-ready
 vitest config.
@@ -134,6 +142,25 @@ See [`backend/TESTING.md`](backend/TESTING.md) and
 | DELETE | `/api/conversations/:id`  | Delete conversation              |
 | GET    | `/api/agents`             | List registered agents           |
 | GET    | `/api/agents/status`      | Agent & engine status            |
+| GET    | `/api/keys`               | List your Sage API keys (masked) |
+| POST   | `/api/keys`               | Create a Sage API key (shown once)| 
+| POST   | `/api/keys/:id/rotate`    | Rotate a Sage API key            |
+| DELETE | `/api/keys/:id`           | Revoke a Sage API key            |
+| GET    | `/api/providers/catalog`  | Available providers & models     |
+| GET    | `/api/providers`          | List your connected providers    |
+| POST   | `/api/providers/connect`  | Connect a provider with your key |
+| GET    | `/api/providers/:id/models`| Discover models for a credential |
+| GET    | `/api/providers/:id/health`| Provider/credential health check |
+| DELETE | `/api/providers/:id`      | Revoke a provider credential     |
+| POST   | `/api/conversations/:id/title` | Update a conversation title  |
+| GET    | `/api/billing/plans`      | Public plans catalog             |
+| GET    | `/api/billing/my-plan`    | Your plan + usage                 |
+| POST   | `/api/billing/checkout`   | Checkout hook (payment provider)  |
+| GET    | `/api/organizations`      | List your organizations           |
+| GET    | `/api/admin/dashboard`    | Admin: platform metrics           |
+
+Full developer documentation — including how to authenticate with a Sage
+API key (`Authorization: Bearer sk_sage_...`) — lives in [`docs/API.md`](docs/API.md).
 
 ## 🧠 The Pipeline
 
@@ -188,11 +215,17 @@ sage-platform/
 │   │   ├── core/intent/          # Pipeline stages
 │   │   │   ├── normalizer.ts
 │   │   │   ├── classifier.ts
+│   │   │   ├── conversation-detector.ts
 │   │   │   ├── validator.ts
 │   │   │   ├── router.ts
 │   │   │   ├── pipeline.ts
 │   │   │   ├── schemas.ts
 │   │   │   └── enums.ts
+│   │   ├── providers/            # BYO provider system
+│   │   │   ├── credentials.ts    # AES-256-GCM encryption
+│   │   │   ├── gateway.ts        # Unified normalization layer
+│   │   │   ├── service.ts        # Orchestration (validate/discover/health)
+│   │   │   └── adapters/         # OpenAI, Anthropic, Gemini, Groq, OpenRouter…
 │   │   ├── agents/               # AI workers
 │   │   │   ├── registry.ts
 │   │   │   ├── base-worker.ts

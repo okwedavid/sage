@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-08-08
+
+### Added
+- **Natural conversation**: new `CHAT` intent with a deterministic detector — greetings (`hello`, `hi`, `hey`, `good morning`, `how are you`, combined phrases) are classified conversationally and bypass the research confidence gate instead of being rejected. Strict validation for genuinely ambiguous tasks is preserved.
+- **BYO provider system (Phases 2/3)**: users connect their own API credentials for OpenAI, Anthropic, Google Gemini, Groq, OpenRouter, and any OpenAI-compatible endpoint (custom `baseUrl`). AES-256-GCM encryption at rest (`SAGE_CREDENTIAL_ENCRYPTION_KEY`), live credential validation, model discovery, health checks, model selection, and revocation. New `providers/` module + migration `005`.
+- **Unified model schema**: `ChatGateway` adapter architecture normalizes every provider response into SAGE's internal schema — the pipeline is provider-agnostic, and new providers are added via a single adapter without touching core logic.
+- **Common image analysis (Phase 4)**: vision worker now validates attachments by magic bytes (JPEG/PNG/WEBP/GIF), detects model vision capability and routes to a vision-capable model on the same credential, and fails gracefully for text-only models.
+- **Conversation memory completion (Phases 5/6)**: unified conversation store (Supabase + demo), auto-generated titles from message context, 100-message cap, per-turn sanitization, automatic persistence on every chat turn, rename endpoint, and frontend session list with reopen/new-conversation controls.
+- **User API settings (Phase 7)**: Settings UI to create (plaintext once), view masked, copy, rotate, revoke Sage API keys with created/status/usage metadata. Sage-issued keys (SHA-256 at rest) are strictly separated from user-supplied provider keys.
+- **Subscription entry point (Phase 8)**: header button beside the profile avatar linking to the existing billing page.
+- **SAGE loading experience (Phase 9)**: `SageLoading` indicator styled on the Sage identity, shown where the response appears and removed on completion/error.
+- **API documentation**: `docs/API.md` — authentication (JWT vs `sk_sage_…`), chat, providers, conversations, billing, and security guarantees.
+
+### Changed
+- Chat route accepts `providerId` (use a connected provider) and auto-persists conversation turns.
+- Classifier/pipeline/workers accept an optional gateway while preserving the default Groq path for back-compat.
+- Vision worker rewritten around capability detection rather than a fixed model chain.
+- Conversations route refactored onto the unified store; titles generated automatically.
+- README updated: endpoint table, provider architecture, `SAGE_CREDENTIAL_ENCRYPTION_KEY`.
+
+### Security
+- Provider keys encrypted at rest (AES-256-GCM); keys never returned, logged, or echoed in errors (`safeError` redaction for `sk-…`, `gsk_…`, `xai-…`, `AIza…`).
+- Fixed cross-user gateway cache bug (cache keyed by adapter+model only — credential identity now included).
+- Provider-connect request fields length-bounded; malformed provider responses bounded before normalization.
+
+### Fixed
+- Greetings rejected by the research confidence gate → now classified as `CHAT`.
+- Common images (PNG/WEBP/GIF) failing or misrouting → magic-byte validation + capability routing.
+- Gateway cache leaking one user's credential to another user on the same adapter+model.
+
+### Verified
+- Backend: **479 tests / 49 files** passing; coverage **92.5% statements / 80.5% branches / 94.25% functions** (thresholds enforced).
+- Backend lint + typechecks (app + tests) clean; frontend lint clean, typecheck clean, production build succeeds.
+
 ## [1.1.0] - 2026-08-06
 
 ### Added
