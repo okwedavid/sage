@@ -38,10 +38,122 @@ vi.mock('groq-sdk', () => ({
 }));
 
 import { VisionWorker } from './vision-worker';
+import { ChatGateway } from '../providers/gateway';
 
 afterEach(() => {
   mockState.failModels = {};
   mockState.calls = [];
+});
+
+// A real 1×1 PNG so the vision worker's magic-byte sniffing yields image/png.
+const PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+
+function stubGateway(overrides: Record<string, any> = {}): ChatGateway {
+  const base: Record<string, any> = {
+    providerId: 'openai',
+    model: 'gpt-4o-mini',
+    supportsVision: async () => true,
+    analyzeImage: async () => ({ content: 'gateway vision reply', model: 'gpt-4o-mini' }),
+    visionModels: async () => [],
+    complete: async () => ({ content: 'gateway text reply', model: 'gpt-4o-mini' }),
+    withModel: () => base,
+  };
+  return Object.assign(base, overrides) as unknown as ChatGateway;
+}
+
+function gatewayVisionIntent(overrides: Record<string, any> = {}) {
+  return createIntent({
+    inputText: 'What is in this diagram?',
+    taskType: TaskType.ANALYZE,
+    targetDomain: 'Computer Vision',
+    goal: 'Analyze image',
+    priority: Priority.NORMAL,
+    outputFormat: OutputFormat.MARKDOWN,
+    attachments: {
+      image_base64: PNG,
+      image_type: 'png',
+      image_name: 'diagram.png',
+    },
+    ...overrides,
+  });
+}
+
+describe('VisionWorker with provider gateway (capability detection)', () => {
+  it('analyzes via the gateway when the selected model supports vision', async () => {
+    const gateway = stubGateway();
+    const worker = new VisionWorker('unused', gateway);
+
+    const reply = await worker.execute(gatewayVisionIntent());
+
+    expect(reply).toContain('gateway vision reply');
+    expect(reply).toContain('via `gpt-4o-mini`');
+    expect(reply).not.toContain('Unavailable');
+  });
+
+  it('routes to a provider vision model when the selected model is text-only', async () => {
+    const gateway = stubGateway({
+      supportsVision: async () => false, // gpt-4o-mini configured without vision
+      visionModels: async () => ['gpt-4o'],
+      withModel: () =>
+        stubGateway({
+          model: 'gpt-4o',
+          supportsVision: async () => true,
+          analyzeImage: async () => ({ content: 'vision fallback reply', model: 'gpt-4o' }),
+        }),
+    });
+    const worker = new VisionWorker('unused', gateway);
+
+    const reply = await worker.execute(gatewayVisionIntent());
+
+    expect(reply).toContain('vision fallback reply');
+    expect(reply).toContain('via `gpt-4o`');
+  });
+
+  it('reports unavailable (without fabricating vision) when no model can see images', async () => {
+    const gateway = stubGateway({
+      supportsVision: async () => false,
+      visionModels: async () => [],
+    });
+    const worker = new VisionWorker('unused', gateway);
+
+    const reply = await worker.execute(gatewayVisionIntent());
+
+    expect(reply).toContain('⚠️ **Vision Analysis Unavailable**');
+    expect(reply).toContain('does not support image input');
+    expect(reply).not.toContain('gateway vision reply');
+  });
+
+  it('reports unavailable when every provider vision model fails', async () => {
+    const gateway = stubGateway({
+      supportsVision: async () => false,
+      visionModels: async () => ['gpt-4o'],
+      withModel: () =>
+        stubGateway({
+          model: 'gpt-4o',
+          supportsVision: async () => true,
+          analyzeImage: async () => {
+            throw new Error('rate limit exceeded');
+          },
+        }),
+    });
+    const worker = new VisionWorker('unused', gateway);
+
+    const reply = await worker.execute(gatewayVisionIntent());
+
+    expect(reply).toContain('⚠️ **Vision Analysis Unavailable**');
+    expect(reply).toContain('gpt-4o');
+    expect(reply).toContain('all attempts failed');
+  });
+
+  it('uses the gateway for the text fallback when no image is attached', async () => {
+    const gateway = stubGateway();
+    const worker = new VisionWorker('unused', gateway);
+
+    const reply = await worker.execute(gatewayVisionIntent({ attachments: {} }));
+
+    expect(reply).toBe('gateway text reply');
+  });
 });
 
 function visionIntent(overrides: Record<string, any> = {}) {

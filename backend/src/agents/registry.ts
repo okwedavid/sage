@@ -22,6 +22,7 @@ export class AgentRegistry {
     [OutputFormat.MARKDOWN]: {
       [TaskType.RESEARCH]: 'WebWorker',
       [TaskType.ANALYZE]: 'WebWorker',
+      [TaskType.CHAT]: 'GeneralWorker',
       default: 'GeneralWorker',
     },
     [OutputFormat.PYTHON]: {
