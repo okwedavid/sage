@@ -14,7 +14,7 @@ const { mockSupabase } = vi.hoisted(() => ({
     createConversation: vi.fn(),
     listConversations: vi.fn(),
     getConversation: vi.fn(),
-    addMessageToConversation: vi.fn(),
+    updateConversationContent: vi.fn(),
     deleteConversationById: vi.fn(),
   },
 }));
@@ -24,7 +24,7 @@ vi.mock('../services/supabase', () => ({
   createConversation: (...args: any[]) => mockSupabase.createConversation(...args),
   listConversations: (...args: any[]) => mockSupabase.listConversations(...args),
   getConversation: (...args: any[]) => mockSupabase.getConversation(...args),
-  addMessageToConversation: (...args: any[]) => mockSupabase.addMessageToConversation(...args),
+  updateConversationContent: (...args: any[]) => mockSupabase.updateConversationContent(...args),
   deleteConversationById: (...args: any[]) => mockSupabase.deleteConversationById(...args),
 }));
 
@@ -44,7 +44,7 @@ beforeEach(() => {
   mockSupabase.createConversation.mockReset();
   mockSupabase.listConversations.mockReset();
   mockSupabase.getConversation.mockReset();
-  mockSupabase.addMessageToConversation.mockReset();
+  mockSupabase.updateConversationContent.mockReset();
   mockSupabase.deleteConversationById.mockReset();
 });
 
@@ -121,8 +121,11 @@ describe('conversations with Supabase', () => {
   });
 
   it('appends messages to a persisted conversation', async () => {
-    mockSupabase.addMessageToConversation.mockResolvedValue({
+    mockSupabase.getConversation.mockResolvedValue({
       id: 'c1', title: 'Hi', messages: [], userId: 'db-user-1', createdAt: 't', updatedAt: 't',
+    });
+    mockSupabase.updateConversationContent.mockResolvedValue({
+      id: 'c1', title: 'Hi', messages: [{ role: 'user', content: 'hello' }], userId: 'db-user-1', createdAt: 't', updatedAt: 't',
     });
 
     await withServer(app, async (baseUrl) => {
@@ -133,16 +136,19 @@ describe('conversations with Supabase', () => {
       });
       expect(status).toBe(201);
       expect(body.role).toBe('user');
-      expect(mockSupabase.addMessageToConversation).toHaveBeenCalledWith(
+      expect(mockSupabase.getConversation).toHaveBeenCalledWith('db-user-1', 'c1');
+      expect(mockSupabase.updateConversationContent).toHaveBeenCalledWith(
         'db-user-1',
         'c1',
-        expect.objectContaining({ role: 'user', content: 'hello' })
+        expect.objectContaining({
+          messages: expect.arrayContaining([expect.objectContaining({ role: 'user', content: 'hello' })]),
+        })
       );
     });
   });
 
   it('returns 404 when adding a message to a missing conversation', async () => {
-    mockSupabase.addMessageToConversation.mockResolvedValue(null);
+    mockSupabase.getConversation.mockResolvedValue(null);
 
     await withServer(app, async (baseUrl) => {
       const { status } = await jsonFetch(`${baseUrl}/api/conversations/nope/messages`, {

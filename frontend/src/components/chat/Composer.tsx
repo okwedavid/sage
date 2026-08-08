@@ -22,9 +22,41 @@ export function Composer() {
     incrementQuery,
     uploadedImage,
     setUploadedImage,
+    user,
+    token,
+    activeConversationId,
+    setActiveConversation,
+    setConversations,
   } = useAppStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  /** Ensure a conversation exists for the authenticated user (memory). */
+  const ensureConversation = async (): Promise<string | undefined> => {
+    if (!user || !token) return undefined; // anonymous/demo sessions stay ephemeral
+    if (activeConversationId) return activeConversationId;
+    try {
+      const conv = await api.createConversation('New Conversation');
+      if (conv?.id) {
+        setActiveConversation(conv.id);
+        return conv.id;
+      }
+    } catch {
+      /* backend unreachable — chat still works without persistence */
+    }
+    return undefined;
+  };
+
+  /** Refresh the sidebar session list after a persisted exchange. */
+  const refreshConversations = async () => {
+    if (!user || !token) return;
+    try {
+      const res = await api.getConversations();
+      if (res?.conversations) setConversations(res.conversations);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const handleSend = async () => {
     const trimmed = text.trim();
@@ -61,11 +93,16 @@ export function Composer() {
       console.log(`🖼️ Sending image: ${uploadedImage.name} (${uploadedImage.type})`);
     }
 
+    // Persistence (Phase 5/6): attach this session to a stored conversation so
+    // the turn is auto-saved by the backend.
+    const conversationId = await ensureConversation();
+
     try {
       const result = await api.chat({
         message: trimmed || '[Image attached] Analyze this image',
         attachments,
         history,
+        conversationId,
       });
 
       const assistantMsg: Message = {
@@ -81,6 +118,9 @@ export function Composer() {
       addMessage(assistantMsg);
       setCurrentIntent(result.intent);
       incrementQuery(result.success);
+
+      // Keep the sidebar session list in sync (titles update after first turn).
+      if (conversationId) refreshConversations();
     } catch (error: any) {
       addMessage({
         id: generateId(),
@@ -236,9 +276,14 @@ export function Composer() {
             onClick={handleSend}
             disabled={isProcessing || (!text.trim() && !uploadedImage)}
             className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-button flex items-center justify-center text-white shadow-glow-md hover:shadow-glow-lg transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-glow-md shrink-0"
+            title={isProcessing ? 'SAGE is processing…' : 'Send'}
           >
             {isProcessing ? (
-              <div className="w-3.5 h-3.5 md:w-4 md:h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              // Sage-identity pulse while processing (Phase 9)
+              <span className="relative flex items-center justify-center">
+                <span className="absolute w-4 h-4 rounded-full bg-white/40 animate-ping" />
+                <span className="w-2.5 h-2.5 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.9)]" />
+              </span>
             ) : (
               <Send className="w-3.5 h-3.5 md:w-4 md:h-4" />
             )}

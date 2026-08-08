@@ -17,6 +17,7 @@ import apiKeyRoutes from './routes/api-keys';
 import adminRoutes from './routes/admin';
 import organizationRoutes from './routes/organizations';
 import billingRoutes from './routes/billing';
+import providerRoutes from './routes/providers';
 
 const app = express();
 
@@ -125,6 +126,7 @@ app.use('/api/keys', apiKeyRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/organizations', organizationRoutes);
 app.use('/api/billing', billingRoutes);
+app.use('/api/providers', providerRoutes);
 
 // ── Monitoring: metrics snapshot (admin/ops) ──
 app.get('/api/metrics', (_req, res) => {
@@ -147,6 +149,7 @@ app.get('/', (_req, res) => {
       admin: '/api/admin',
       organizations: '/api/organizations',
       billing: '/api/billing',
+      providers: '/api/providers',
       metrics: '/api/metrics',
     },
   });

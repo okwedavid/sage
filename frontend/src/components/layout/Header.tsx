@@ -4,10 +4,10 @@
 'use client';
 
 import { useAppStore } from '@/stores/appStore';
-import { Brain, Menu, PanelRight } from 'lucide-react';
+import { Brain, Menu, PanelRight, Zap } from 'lucide-react';
 
 export function Header() {
-  const { user, toggleSidebar, toggleInspector } = useAppStore();
+  const { user, toggleSidebar, toggleInspector, setPage } = useAppStore();
 
   return (
     <header className="relative z-50 h-14 flex items-center justify-between px-4 md:px-5 bg-sage-surface/85 backdrop-blur-2xl border-b border-sage-border">
@@ -57,8 +57,22 @@ export function Header() {
           <PanelRight className="w-5 h-5" />
         </button>
 
+        {/* Subscription entry point (Phase 8) — next to the profile avatar */}
+        <button
+          onClick={() => setPage('billing')}
+          className="hidden sm:flex items-center gap-1.5 px-3 h-8 rounded-lg bg-gradient-button text-white text-xs font-semibold shadow-glow-md hover:shadow-glow-lg hover:-translate-y-0.5 transition-all duration-200 active:translate-y-0"
+          title="View plans & usage"
+        >
+          <Zap className="w-3.5 h-3.5" />
+          Upgrade
+        </button>
+
         {/* User avatar */}
-        <div className="w-8 h-8 rounded-full bg-gradient-primary flex items-center justify-center text-white font-bold text-xs cursor-pointer hover:shadow-glow-md transition-shadow">
+        <div
+          onClick={() => setPage('settings')}
+          className="w-8 h-8 rounded-full bg-gradient-primary flex items-center justify-center text-white font-bold text-xs cursor-pointer hover:shadow-glow-md transition-shadow"
+          title="Settings"
+        >
           {user?.name?.charAt(0).toUpperCase() || 'S'}
         </div>
       </div>

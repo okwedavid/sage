@@ -5,11 +5,12 @@
  * deterministically. The classifier call is identified by `response_format`
  * (only the classifier requests json_object).
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import jwt from 'jsonwebtoken';
 import { withServer, jsonFetch } from '../test-utils/http';
 import { recordChatUsage } from '../services/billing';
 import { Settings } from '../config/settings';
+import { resetProviderStoreForTesting } from '../providers/service';
 
 const { mockGroq } = vi.hoisted(() => ({
   mockGroq: {
@@ -50,6 +51,10 @@ vi.hoisted(() => {
 });
 
 import app from '../index';
+
+beforeEach(() => {
+  resetProviderStoreForTesting();
+});
 
 afterEach(() => {
   mockGroq.calls = [];
@@ -115,16 +120,44 @@ describe('POST /api/chat — happy paths', () => {
   });
 
   it('routes attachment-only requests to VisionWorker', async () => {
+    // A real 1×1 transparent PNG (magic bytes 89 50 4E 47 …) so the attachment
+    // validator's format check passes.
+    const png =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
     await withServer(app, async (baseUrl) => {
       const { status, body } = await postChat(baseUrl, {
         message: '',
-        attachments: { image_base64: 'aGVsbG8=', image_type: 'png' },
+        attachments: { image_base64: png, image_type: 'png' },
       });
 
       expect(status).toBe(200);
       expect(body.agent).toBe('VisionWorker');
       expect(body.success).toBe(true);
       expect(body.intent.has_attachments).toBe(true);
+    });
+  });
+
+  it('rejects image payloads that are not real images', async () => {
+    await withServer(app, async (baseUrl) => {
+      const { status, body } = await postChat(baseUrl, {
+        message: 'analyze',
+        attachments: { image_base64: 'aGVsbG8=', image_type: 'png' }, // "hello" — not an image
+      });
+      expect(status).toBe(400);
+      expect(body.error).toContain('not a supported format');
+    });
+  });
+
+  it('rejects image_type values that contradict the actual bytes', async () => {
+    const png =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    await withServer(app, async (baseUrl) => {
+      const { status, body } = await postChat(baseUrl, {
+        message: 'analyze',
+        attachments: { image_base64: png, image_type: 'jpeg' }, // claims jpeg, is png
+      });
+      expect(status).toBe(400);
+      expect(body.error).toContain('does not match the actual image content');
     });
   });
 
@@ -244,6 +277,201 @@ describe('POST /api/chat — happy paths', () => {
       expect(body.plan).toBe('free');
       expect(body.error).toContain('Daily request limit');
     });
+  });
+});
+
+describe('POST /api/chat — user-provider routing (Phase 2/3)', () => {
+  const png =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+  const realFetch = globalThis.fetch.bind(globalThis);
+  const PROVIDER_HOSTS = /(api\.openai\.com|api\.groq\.com|generativelanguage\.googleapis\.com|api\.anthropic\.com|openrouter\.ai|localhost:11434)/;
+  let providerResponder: (url: string, init?: any) => any;
+
+  function stubProviderFetch() {
+    providerResponder = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ choices: [{ message: { content: 'ping' } }] }),
+    });
+    vi.stubGlobal('fetch', (url: any, init?: any) => {
+      const u = String(url);
+      if (PROVIDER_HOSTS.test(u)) return providerResponder(u, init);
+      return realFetch(u, init);
+    });
+  }
+
+  it('routes through a connected provider when providerId is supplied', async () => {
+    const token = jwt.sign({ userId: 'provider-chat-user', email: 'pc@user.dev' }, Settings.JWT_SECRET);
+    const headers = { Authorization: `Bearer ${token}` };
+
+    stubProviderFetch();
+
+    await withServer(app, async (baseUrl) => {
+      const connectRes = await jsonFetch(`${baseUrl}/api/providers/connect`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ provider: 'openai', apiKey: 'sk-test-1234567890abcdef' }),
+      });
+      const providerId = connectRes.body.credential.id;
+
+      // Chat: classifier call (SAGE-Classifier prompt) then worker call.
+      providerResponder = async (_url: string, init: any) => {
+        const body = JSON.parse(init?.body || '{}');
+        const isClassifier = String(body?.messages?.[0]?.content || '').includes('SAGE-Classifier');
+        return {
+          ok: true,
+          status: 200,
+          json: async () =>
+            isClassifier
+              ? { choices: [{ message: { content: JSON.stringify({
+                    task_type: 'RESEARCH', target_domain: 'Web', confidence_score: 0.95, priority: 'NORMAL', summary: 'goal' })} }], model: 'gpt-4o-mini' }
+              : { choices: [{ message: { content: 'Provider-powered reply' } }], model: 'gpt-4o-mini' },
+        };
+      };
+
+      const res = await jsonFetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ message: 'research quantum computing', providerId }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.response).toBe('Provider-powered reply');
+      expect(res.body.provider).toBe('openai');
+      expect(res.body.model).toBe('gpt-4o-mini');
+    });
+
+    vi.unstubAllGlobals();
+  });
+
+  it('rejects unknown provider ids with 400', async () => {
+    const token = jwt.sign({ userId: 'provider-chat-user2', email: 'pc2@user.dev' }, Settings.JWT_SECRET);
+    await withServer(app, async (baseUrl) => {
+      const { status, body } = await jsonFetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ message: 'hello', providerId: 'does-not-exist' }),
+      });
+      expect(status).toBe(400);
+      expect(body.error).toContain('not found');
+    });
+  });
+
+  it('requires an authenticated session for provider selection', async () => {
+    await withServer(app, async (baseUrl) => {
+      const { status } = await jsonFetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        body: JSON.stringify({ message: 'hello', providerId: 'x' }),
+      });
+      expect(status).toBe(401);
+    });
+  });
+
+  it('rejects foreign provider ids even when authenticated', async () => {
+    const owner = jwt.sign({ userId: 'owner-user', email: 'o@user.dev' }, Settings.JWT_SECRET);
+    const intruder = jwt.sign({ userId: 'intruder-user', email: 'i@user.dev' }, Settings.JWT_SECRET);
+
+    stubProviderFetch();
+
+    await withServer(app, async (baseUrl) => {
+      const connectRes = await jsonFetch(`${baseUrl}/api/providers/connect`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${owner}` },
+        body: JSON.stringify({ provider: 'openai', apiKey: 'sk-test-1234567890abcdef' }),
+      });
+      const providerId = connectRes.body.credential.id;
+
+      const res = await jsonFetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${intruder}` },
+        body: JSON.stringify({ message: 'hello', providerId }),
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('not found');
+    });
+
+    vi.unstubAllGlobals();
+  });
+
+  it('persists turns into the caller’s conversation (Phase 5)', async () => {
+    const token = jwt.sign({ userId: 'memory-chat-user', email: 'mc@user.dev' }, Settings.JWT_SECRET);
+    const headers = { Authorization: `Bearer ${token}` };
+
+    await withServer(app, async (baseUrl) => {
+      const conv = await jsonFetch(`${baseUrl}/api/conversations`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ title: 'New Conversation' }),
+      });
+
+      const res = await jsonFetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ message: 'research black holes', conversationId: conv.body.id }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.conversationTitle).toBe('research black holes');
+
+      const fetched = await jsonFetch(`${baseUrl}/api/conversations/${conv.body.id}`, { headers });
+      expect(fetched.body.title).toBe('research black holes');
+      expect(fetched.body.messages).toHaveLength(2);
+      expect(fetched.body.messages[0].role).toBe('user');
+      expect(fetched.body.messages[1].role).toBe('assistant');
+    });
+  });
+
+  it('persists silently (200) when the conversationId is unknown or foreign', async () => {
+    const token = jwt.sign({ userId: 'ghost-user', email: 'g@user.dev' }, Settings.JWT_SECRET);
+    await withServer(app, async (baseUrl) => {
+      const res = await jsonFetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ message: 'hello', conversationId: 'not-a-real-conversation' }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.conversationTitle).toBeNull();
+    });
+  });
+
+  it('still accepts image attachments through the gateway path', async () => {
+    const token = jwt.sign({ userId: 'vision-chat-user', email: 'vc@user.dev' }, Settings.JWT_SECRET);
+    const headers = { Authorization: `Bearer ${token}` };
+
+    stubProviderFetch();
+
+    await withServer(app, async (baseUrl) => {
+      const connectRes = await jsonFetch(`${baseUrl}/api/providers/connect`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ provider: 'openai', apiKey: 'sk-test-1234567890abcdef', model: 'gpt-4o' }),
+      });
+      const providerId = connectRes.body.credential.id;
+
+      providerResponder = async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { content: 'The image shows a chart' } }],
+          model: 'gpt-4o',
+        }),
+      });
+
+      const res = await jsonFetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          message: 'analyze',
+          attachments: { image_base64: png, image_type: 'png' },
+          providerId,
+        }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.response).toContain('The image shows a chart');
+    });
+
+    vi.unstubAllGlobals();
   });
 });
 

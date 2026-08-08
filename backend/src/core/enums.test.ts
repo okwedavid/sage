@@ -5,10 +5,13 @@ import { describe, it, expect } from 'vitest';
 import { TaskType, Priority, Status, OutputFormat, canAdvanceStatus } from './enums';
 
 describe('TaskType', () => {
-  it('has all 10 task types', () => {
-    expect(Object.values(TaskType)).toHaveLength(10);
+  it('has all 11 task types including CHAT', () => {
+    expect(Object.values(TaskType)).toHaveLength(11);
     expect(TaskType.BUILD).toBe('BUILD');
     expect(TaskType.REVIEW).toBe('REVIEW');
+    // CHAT is the conversational intent (greetings/small talk) added so those
+    // inputs bypass the strict research gate deterministically.
+    expect(TaskType.CHAT).toBe('CHAT');
   });
 });
 

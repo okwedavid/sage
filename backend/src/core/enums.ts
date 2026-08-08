@@ -14,6 +14,8 @@ export enum TaskType {
   GENERATE = 'GENERATE',
   TRANSLATE = 'TRANSLATE',
   REVIEW = 'REVIEW',
+  /** Conversational / general chat (greetings, small talk, casual Q&A). */
+  CHAT = 'CHAT',
 }
 
 export enum Priority {

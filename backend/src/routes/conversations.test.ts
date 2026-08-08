@@ -152,4 +152,72 @@ describe('conversation CRUD', () => {
       expect(del.status).toBe(404);
     });
   });
+
+  it('generates a title from the first message hint', async () => {
+    await withServer(app, async (baseUrl) => {
+      const created = await jsonFetch(`${baseUrl}/api/conversations`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ firstMessage: 'Build a landing page with Next.js' }),
+      });
+      expect(created.status).toBe(201);
+      expect(created.body.title).toBe('Build a landing page with Next.js');
+    });
+  });
+
+  it('renames conversations and validates the title', async () => {
+    await withServer(app, async (baseUrl) => {
+      const created = await jsonFetch(`${baseUrl}/api/conversations`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ title: 'Old' }),
+      });
+
+      const renamed = await jsonFetch(`${baseUrl}/api/conversations/${created.body.id}`, {
+        method: 'PATCH',
+        headers: authHeaders,
+        body: JSON.stringify({ title: 'Renamed!' }),
+      });
+      expect(renamed.status).toBe(200);
+      expect(renamed.body.title).toBe('Renamed!');
+
+      const bad = await jsonFetch(`${baseUrl}/api/conversations/${created.body.id}`, {
+        method: 'PATCH',
+        headers: authHeaders,
+        body: JSON.stringify({ title: '' }),
+      });
+      expect(bad.status).toBe(400);
+
+      const foreign = await jsonFetch(`${baseUrl}/api/conversations/${created.body.id}`, {
+        method: 'PATCH',
+        headers: otherHeaders,
+        body: JSON.stringify({ title: 'steal' }),
+      });
+      expect(foreign.status).toBe(404);
+    });
+  });
+
+  it('rejects invalid message roles', async () => {
+    await withServer(app, async (baseUrl) => {
+      const created = await jsonFetch(`${baseUrl}/api/conversations`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ title: 'chat' }),
+      });
+      const res = await jsonFetch(`${baseUrl}/api/conversations/${created.body.id}/messages`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ role: 'robot', content: 'hi' }),
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('role');
+
+      const empty = await jsonFetch(`${baseUrl}/api/conversations/${created.body.id}/messages`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ role: 'user' }),
+      });
+      expect(empty.status).toBe(400);
+    });
+  });
 });

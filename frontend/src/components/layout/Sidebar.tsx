@@ -3,7 +3,9 @@
  */
 'use client';
 
+import { useEffect } from 'react';
 import { useAppStore } from '@/stores/appStore';
+import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
@@ -18,6 +20,8 @@ import {
   Plus,
   LogOut,
   X,
+  History,
+  Trash2,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -33,7 +37,30 @@ const NAV_ITEMS = [
 ];
 
 export function Sidebar() {
-  const { currentPage, setPage, clearMessages, user, logout, sidebarOpen, toggleSidebar } = useAppStore();
+  const {
+    currentPage,
+    setPage,
+    user,
+    logout,
+    sidebarOpen,
+    toggleSidebar,
+    conversations,
+    setConversations,
+    loadConversation,
+    newConversation,
+    activeConversationId,
+  } = useAppStore();
+
+  // Load the user's saved sessions when authenticated (Phase 5/6 memory).
+  useEffect(() => {
+    if (!user) return;
+    api
+      .getConversations()
+      .then((res) => {
+        if (res?.conversations) setConversations(res.conversations);
+      })
+      .catch(() => {});
+  }, [user, setConversations]);
 
   const handleNavClick = (pageId: string) => {
     setPage(pageId);
@@ -44,10 +71,28 @@ export function Sidebar() {
   };
 
   const handleNewConversation = () => {
-    clearMessages();
+    newConversation();
     setPage('conversations');
     if (window.innerWidth < 1024) {
       toggleSidebar();
+    }
+  };
+
+  const handleOpenSession = (id: string) => {
+    const conv = conversations.find((c) => c.id === id);
+    if (conv) {
+      loadConversation(conv);
+      setPage('conversations');
+      if (window.innerWidth < 1024) toggleSidebar();
+    }
+  };
+
+  const handleDeleteSession = async (id: string) => {
+    try {
+      await api.deleteConversation(id);
+      setConversations(conversations.filter((c) => c.id !== id));
+    } catch {
+      /* ignore */
     }
   };
 
@@ -90,6 +135,48 @@ export function Sidebar() {
             New Conversation
           </button>
         </div>
+
+        {/* Recent sessions (memory) */}
+        {user && conversations.length > 0 && (
+          <div className="px-3 pb-1">
+            <div className="flex items-center gap-1.5 px-3.5 mb-1.5">
+              <History className="w-3 h-3 text-txt-muted" />
+              <span className="text-[10px] font-bold tracking-[0.12em] text-txt-muted uppercase">
+                Recent Sessions
+              </span>
+            </div>
+            <div className="space-y-1 max-h-[30vh] overflow-y-auto pr-1">
+              {conversations.slice(0, 12).map((conv) => (
+                <div
+                  key={conv.id}
+                  className={cn(
+                    'group flex items-center gap-1 rounded-lg px-2 py-1.5 cursor-pointer transition-all',
+                    activeConversationId === conv.id
+                      ? 'bg-accent-primary/15 border border-accent-primary/30'
+                      : 'hover:bg-sage-hover border border-transparent'
+                  )}
+                  onClick={() => handleOpenSession(conv.id)}
+                  title={`Reopen: ${conv.title}`}
+                >
+                  <MessageSquare className="w-3.5 h-3.5 text-txt-muted shrink-0" />
+                  <span className="flex-1 min-w-0 text-[12px] text-txt-secondary truncate group-hover:text-txt-primary transition-colors">
+                    {conv.title}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteSession(conv.id);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded text-txt-muted hover:text-status-error transition-all"
+                    aria-label={`Delete session ${conv.title}`}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Navigation */}
         <nav className="flex-1 px-2 py-2 space-y-1 overflow-y-auto">

@@ -67,6 +67,10 @@ interface AppState {
   activeConversationId: string | null;
   setConversations: (convs: Conversation[]) => void;
   setActiveConversation: (id: string | null) => void;
+  /** Load a stored conversation into the chat (messages + active id). */
+  loadConversation: (conv: Conversation) => void;
+  /** Start fresh: clear messages and detach from any conversation. */
+  newConversation: () => void;
 
   // Pipeline
   currentIntent: IntentData | null;
@@ -118,6 +122,22 @@ export const useAppStore = create<AppState>((set) => ({
   activeConversationId: null,
   setConversations: (convs) => set({ conversations: convs }),
   setActiveConversation: (id) => set({ activeConversationId: id }),
+  loadConversation: (conv) =>
+    set({
+      messages: (conv.messages || []).map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        intent: m.intent,
+        agent: m.agent,
+        timestamp: m.timestamp,
+        attachments: m.attachments,
+        stages: m.stages,
+      })),
+      activeConversationId: conv.id,
+      currentIntent: null,
+    }),
+  newConversation: () => set({ messages: [], activeConversationId: null, currentIntent: null }),
 
   // Pipeline
   currentIntent: null,

@@ -12,6 +12,7 @@ import { IntentSchema } from './schemas';
 import { Status } from '../enums';
 import { AgentRegistry } from '../../agents/registry';
 import { metrics } from '../../services/metrics';
+import { ChatGateway } from '../../providers/gateway';
 
 // Workers signal failure by prefixing their reply with one of these markers
 // (see general/web/vision workers). Used to classify execution success for
@@ -40,9 +41,9 @@ export class IntentPipeline {
   private validator: IntentValidator;
   private router: IntentRouter;
 
-  constructor(apiKey: string, registry: AgentRegistry, customModel?: string) {
+  constructor(apiKey: string, registry: AgentRegistry, customModel?: string, gateway?: ChatGateway) {
     this.normalizer = new IntentNormalizer();
-    this.classifier = new IntentClassifier(apiKey, customModel);
+    this.classifier = new IntentClassifier(apiKey, customModel, gateway);
     this.validator = new IntentValidator();
     this.router = new IntentRouter(registry);
     console.log('✅ [Pipeline] All subsystems initialized');
