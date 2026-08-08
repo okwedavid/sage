@@ -88,7 +88,7 @@ describe('IntentClassifier', () => {
     jsonResponse({ task_type: 'DANCE' });
     const classifier = new IntentClassifier('gsk_test_key');
 
-    const intent = await classifier.classify('hello there');
+    const intent = await classifier.classify('sort my files by date');
 
     expect(intent.taskType).toBe(TaskType.REVIEW);
   });
@@ -97,7 +97,7 @@ describe('IntentClassifier', () => {
     jsonResponse({ priority: 'URGENT' });
     const classifier = new IntentClassifier('gsk_test_key');
 
-    const intent = await classifier.classify('hello there');
+    const intent = await classifier.classify('explain rust lifetimes');
 
     expect(intent.priority).toBe(Priority.NORMAL);
   });
@@ -106,7 +106,7 @@ describe('IntentClassifier', () => {
     jsonResponse({});
     const classifier = new IntentClassifier('gsk_test_key', 'custom-8b-model');
 
-    await classifier.classify('hello');
+    await classifier.classify('explain quantum entanglement');
 
     expect(mockState.createCalls[0].model).toBe('custom-8b-model');
   });
@@ -119,10 +119,36 @@ describe('IntentClassifier', () => {
     });
     const classifier = new IntentClassifier('gsk_test_key');
 
-    const intent = await classifier.classify('hello');
+    const intent = await classifier.classify('draft a terms of service');
 
     expect(intent.goal).toBe('');
     expect(intent.entities).toEqual({});
+  });
+
+  describe('greeting / conversational short-circuit', () => {
+    it('classifies greetings as CHAT with high confidence WITHOUT calling the LLM', async () => {
+      const classifier = new IntentClassifier('gsk_test_key');
+
+      for (const greeting of ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'how are you']) {
+        mockState.createCalls = [];
+        const intent = await classifier.classify(greeting);
+
+        expect(intent.taskType).toBe(TaskType.CHAT);
+        expect(intent.confidenceScore).toBeGreaterThan(Settings.CONFIDENCE_THRESHOLD);
+        // Deterministic path: the LLM must never be called for pure greetings.
+        expect(mockState.createCalls).toHaveLength(0);
+      }
+    });
+
+    it('still classifies greeting-prefixed real tasks via the LLM', async () => {
+      jsonResponse({ task_type: 'DEBUG', target_domain: 'Python', confidence_score: 0.9 });
+      const classifier = new IntentClassifier('gsk_test_key');
+
+      const intent = await classifier.classify('hey, debug this python error');
+
+      expect(intent.taskType).toBe(TaskType.DEBUG);
+      expect(mockState.createCalls).toHaveLength(1);
+    });
   });
 
   it('falls back to a safe REVIEW intent when the API call fails', async () => {

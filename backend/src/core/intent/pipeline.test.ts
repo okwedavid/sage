@@ -91,6 +91,26 @@ describe('IntentPipeline', () => {
     expect(result.stages[3].detail).toBe('VisionWorker');
   });
 
+  it('greetings are never rejected and route to the conversational worker', async () => {
+    // A greeting must produce a CHAT intent that passes the strict gate even
+    // if the (mocked) LLM classifier would have said RESEARCH with low
+    // confidence — the deterministic detector overrides it before validation.
+    mockState.classifyResult = validClassifyResult({
+      taskType: TaskType.CHAT,
+      targetDomain: 'General',
+      confidenceScore: 0.97,
+    });
+    const pipeline = buildPipeline();
+
+    const result = await pipeline.process('hello');
+
+    expect(result.success).toBe(true);
+    expect(result.agent).toBe('GeneralWorker');
+    expect(result.intent?.taskType).toBe(TaskType.CHAT);
+    expect(result.intent?.status).toBe(Status.COMPLETED);
+    expect(result.stages.every((s) => s.success)).toBe(true);
+  });
+
   it('rejects low-confidence intents at the validation gate', async () => {
     mockState.classifyResult = validClassifyResult({ confidenceScore: 0.1 });
     const pipeline = buildPipeline();

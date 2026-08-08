@@ -25,6 +25,7 @@ const TASK_ROLES: Record<string, string> = {
   [TaskType.PLAN]: 'You are a strategic planner. Create actionable step-by-step plans with milestones.',
   [TaskType.TRANSLATE]: 'You are a professional translator. Preserve meaning and tone.',
   [TaskType.REVIEW]: 'You are a helpful cognitive assistant. Respond naturally and helpfully.',
+  [TaskType.CHAT]: 'You are SAGE, a warm, friendly conversational assistant. Keep responses natural, concise, and helpful — no unnecessary structure for casual chat.',
 };
 
 export function buildSystemPrompt(taskType: TaskType | string, customRole?: string): string {
