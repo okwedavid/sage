@@ -26,6 +26,21 @@ POST /api/auth/login      { "email", "password" }
 
 Returns `{ token }`. Send it as `Authorization: Bearer <token>`.
 
+### Password reset
+
+```
+POST /api/auth/forgot-password   { "email" }
+POST /api/auth/reset-password    { "token", "password" }
+```
+
+- `forgot-password` always answers `200` with the same message whether or not
+  the account exists (no user enumeration). In non-production without
+  `RESEND_API_KEY` the response also includes `devResetUrl` for local testing.
+- `reset-password` expects the token from the email (`?reset_token=…` link)
+  and a password ≥ 6 chars. Tokens are single-use and expire after 1 hour
+  (`PASSWORD_RESET_TTL_MS`); only their SHA-256 hash is stored.
+- Both endpoints are rate-limited per IP.
+
 ### Sage API key (server-to-server)
 
 ```
@@ -105,6 +120,7 @@ AES-256-GCM** and are never returned, logged, or echoed in errors.
 | GET    | `/api/providers/:id/models` | Live model discovery from the provider |
 | POST   | `/api/providers/:id/health` | Validate + refresh status |
 | PATCH  | `/api/providers/:id`        | `{ model?, label?, supportsVision? }` — select model |
+| POST   | `/api/providers/:id/rotate` | `{ apiKey }` — atomic key rotation (new key validated against the provider before replacing the old) |
 | DELETE | `/api/providers/:id`        | Revoke (destroys encrypted key) |
 
 Supported providers: **OpenAI, Anthropic, Google Gemini, Groq, OpenRouter,
@@ -143,14 +159,22 @@ pipeline is provider-agnostic. Chat requests can pin a provider with
 | Method | Endpoint | Notes |
 |---|---|---|
 | GET    | `/api/billing/plans`        | Public plans catalog |
-| GET    | `/api/billing/my-plan`      | Your plan + daily usage |
-| POST   | `/api/billing/checkout`     | Checkout contract (payment-provider hook) |
+| GET    | `/api/billing/plan`         | Your plan + daily usage |
+| POST   | `/api/billing/checkout`     | `{ planId }` → Stripe Checkout URL (subscription) |
+| POST   | `/api/billing/portal`       | Opens the Stripe billing portal |
+| POST   | `/api/billing/webhook`      | Stripe webhook (signature-verified, idempotent) |
 | GET    | `/api/organizations`        | Your orgs |
 | POST   | `/api/organizations`        | Create org |
 
-Stripe (or any provider) is not required for SAGE to run; the billing layer
-returns the exact contract a payment provider will fulfill. See
-`backend/.env.example` for the provider env vars a human must supply.
+**Billing** is live once the four Stripe env vars are set (`STRIPE_SECRET_KEY`,
+`STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_TEAM`): checkout
+creates a real Checkout session, the portal manages the subscription, and
+`POST /api/billing/webhook` verifies signatures against the raw body and
+processes subscription/invoice events idempotently (Stripe retries are safe).
+Until then, checkout/portal return the `payment_provider_not_configured`
+contract and webhooks answer `501` — SAGE runs fully without Stripe.
+
+See `backend/.env.example` for all provider env vars.
 
 ---
 

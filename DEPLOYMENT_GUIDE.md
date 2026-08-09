@@ -237,6 +237,42 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...your-anon-key...
 
 ---
 
+## 💳 Phase 4.5 (Optional): Monetization — Stripe + Resend
+
+SAGE runs without either; add these only when you want to charge customers
+and send password-reset emails.
+
+**Stripe (test mode first):**
+
+```env
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_PRO=price_...
+STRIPE_PRICE_TEAM=price_...
+```
+
+1. Create recurring **Pro** and **Team** prices in Stripe → Products, copy the
+   `price_…` API IDs.
+2. Register the webhook endpoint `https://<your-backend>.railway.app/api/billing/webhook`
+   and subscribe to: `checkout.session.completed`, `customer.subscription.updated`,
+   `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`.
+3. Copy the `whsec_…` signing secret from the webhook dashboard.
+
+**Resend (password reset email):**
+
+```env
+RESEND_API_KEY=re_...
+EMAIL_FROM=SAGE <no-reply@yourdomain.com>
+```
+
+Get a key at https://resend.com. Without it, production skips sending (reset
+links are only returned to callers in non-production dev mode).
+
+**Database:** apply migration `006_password_reset_stripe.sql` (adds
+`password_resets` + `stripe_events`).
+
+---
+
 ## 🧪 Phase 5: Test Everything
 
 ### Test 1: Landing Page

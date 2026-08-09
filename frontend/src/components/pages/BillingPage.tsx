@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { CreditCard, Gauge, Sparkles, Check, Loader2, ArrowUpRight } from 'lucide-react';
+import { CreditCard, Gauge, Sparkles, Check, Loader2, ArrowUpRight, Settings2 } from 'lucide-react';
 import { api } from '@/lib/api';
 
 interface Plan {
@@ -33,6 +33,28 @@ export function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [checkoutMsg, setCheckoutMsg] = useState('');
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
+  const [portalBusy, setPortalBusy] = useState(false);
+  const [stripeNotice, setStripeNotice] = useState('');
+
+  // Show a banner when Stripe redirects back after checkout / portal.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('checkout') === 'success') {
+      setStripeNotice('Your subscription is being activated. Your plan and usage will refresh shortly.');
+    } else if (params.get('checkout') === 'cancelled') {
+      setStripeNotice('Checkout cancelled — your plan has not changed.');
+    } else if (params.get('portal') === 'return') {
+      setStripeNotice('Your billing details have been updated.');
+    }
+    if (params.has('checkout') || params.has('portal')) {
+      params.delete('checkout');
+      params.delete('session_id');
+      params.delete('portal');
+      const next = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
+      window.history.replaceState({}, '', next);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -61,8 +83,12 @@ export function BillingPage() {
     setCheckoutMsg('');
     try {
       const res = await api.requestCheckout(planId);
-      // The backend returns 501 with a structured body until a payment provider
-      // is wired (see backend/src/routes/billing.ts). Show the upgrade path.
+      if (res?.url) {
+        // Stripe Checkout session — send the user to the hosted checkout page.
+        window.location.href = res.url;
+        return;
+      }
+      // Backend not configured: show the structured message.
       setCheckoutMsg(
         res.message ||
           'Upgrades are not available yet — payment processing is being configured. Contact sales@sage.ai.'
@@ -79,6 +105,28 @@ export function BillingPage() {
       setBusyPlan(null);
     }
   };
+
+  const handlePortal = async () => {
+    setPortalBusy(true);
+    setCheckoutMsg('');
+    try {
+      const res = await api.requestBillingPortal();
+      if (res?.url) {
+        window.location.href = res.url;
+        return;
+      }
+      setCheckoutMsg(res?.message || 'The billing portal is not available yet.');
+    } catch (e: any) {
+      const body = e?.body;
+      setCheckoutMsg(
+        body?.message || body?.error || e?.message || 'The billing portal is not available yet.'
+      );
+    } finally {
+      setPortalBusy(false);
+    }
+  };
+
+  const isPaidPlan = !!current && current.plan.id !== 'free';
 
   const usagePct = current && current.quota.limit > 0 ? Math.min(100, (current.quota.used / current.quota.limit) * 100) : 0;
 
@@ -120,6 +168,16 @@ export function BillingPage() {
               </ul>
               {current?.subscription.status && current.subscription.status !== 'active' && (
                 <p className="mt-4 text-xs text-txt-muted">Status: {current.subscription.status}</p>
+              )}
+              {isPaidPlan && (
+                <button
+                  onClick={handlePortal}
+                  disabled={portalBusy}
+                  className="mt-4 w-full py-2.5 rounded-xl bg-sage-card border border-sage-border text-sm font-semibold text-txt-primary flex items-center justify-center gap-1.5 hover:border-accent-primary/40 hover:bg-sage-hover transition-all disabled:opacity-60"
+                >
+                  {portalBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Settings2 className="w-4 h-4" />}
+                  Manage Billing
+                </button>
               )}
             </motion.div>
 
@@ -163,6 +221,18 @@ export function BillingPage() {
               )}
             </motion.div>
           </div>
+
+          {/* Stripe return notice */}
+          {stripeNotice && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-4 rounded-xl bg-status-success/10 border border-status-success/30 text-txt-secondary text-sm flex items-center gap-2"
+            >
+              <Sparkles className="w-4 h-4 text-status-success shrink-0" />
+              {stripeNotice}
+            </motion.div>
+          )}
 
           {/* Checkout notice */}
           {checkoutMsg && (

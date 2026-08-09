@@ -310,6 +310,65 @@ class ProviderServiceImpl {
     return true;
   }
 
+  // ── Key rotation ──────────────────────────────────────────────────────────
+  /**
+   * Replace/rotate a credential's API key: the new key is validated against
+   * the live provider BEFORE it is encrypted and persisted, so a bad key can
+   * never overwrite a working one. The plaintext key never crosses the API
+   * boundary and is never logged.
+   */
+  async rotateKey(
+    userId: string,
+    id: string,
+    apiKey: string
+  ): Promise<{ ok: boolean; error?: string; record?: ProviderCredential }> {
+    const cred = await this.get(userId, id);
+    if (!cred) return { ok: false, error: 'Provider credential not found' };
+
+    const key = (apiKey || '').trim();
+    if (!key) return { ok: false, error: 'API key is required' };
+    if (key.length > 500) return { ok: false, error: 'apiKey is too long' };
+
+    const adapter =
+      cred.provider === 'openai-compatible'
+        ? getCustomAdapter({ vision: !!cred.capabilities?.vision })
+        : getAdapter(cred.provider);
+    if (!adapter) return { ok: false, error: 'Provider adapter unavailable' };
+
+    const model = cred.model || getCatalogEntry(cred.provider)?.defaultModel || '';
+    const probe = new ChatGateway(adapter, key, { model: model || 'probe', baseUrl: cred.baseUrl || undefined });
+    const validation = await probe.validate();
+    if (!validation.ok) {
+      return { ok: false, error: `Validation failed: ${validation.error || 'provider rejected the credential'}` };
+    }
+
+    const encryptedKey = encryptSecret(key);
+    let ok = false;
+    if (isSupabaseConfigured()) {
+      ok = await dbUpdate(userId, id, {
+        encrypted_key: encryptedKey,
+        status: 'active',
+        last_error: null,
+        last_checked_at: new Date().toISOString(),
+      });
+    } else {
+      const mem = memCredentials.get(id);
+      if (mem && mem.userId === userId) {
+        mem.encryptedKey = encryptedKey;
+        mem.status = 'active';
+        mem.lastError = null;
+        mem.lastCheckedAt = new Date().toISOString();
+        mem.updatedAt = new Date().toISOString();
+        ok = true;
+      }
+    }
+    if (!ok) return { ok: false, error: 'Failed to rotate provider credential' };
+
+    await recordAudit({ actorType: 'user', actorId: userId, action: 'provider.key_rotated', resource: id });
+    const fresh = await this.get(userId, id);
+    return { ok: true, record: fresh || undefined };
+  }
+
   // ── Revocation ────────────────────────────────────────────────────────────
   async revoke(userId: string, id: string): Promise<{ ok: boolean; error?: string }> {
     const cred = await this.get(userId, id);

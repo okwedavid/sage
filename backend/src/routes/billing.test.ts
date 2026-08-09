@@ -93,3 +93,17 @@ describe('POST /api/billing/portal', () => {
     });
   });
 });
+
+describe('POST /api/billing/webhook', () => {
+  it('returns 501 until Stripe is configured', async () => {
+    await withServer(app, async (baseUrl) => {
+      const { status, body } = await jsonFetch(`${baseUrl}/api/billing/webhook`, {
+        method: 'POST',
+        headers: { 'stripe-signature': 't=1700000000,v1=x' },
+        body: JSON.stringify({ id: 'evt_1', type: 'ping' }),
+      });
+      expect(status).toBe(501);
+      expect(body.error).toBe('Stripe is not configured');
+    });
+  });
+});

@@ -198,6 +198,35 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// POST /api/providers/:id/rotate — replace the stored key (validated first)
+router.post('/:id/rotate', async (req: AuthRequest, res: Response) => {
+  try {
+    const { apiKey } = req.body || {};
+    if (typeof apiKey !== 'string' || !apiKey.trim()) {
+      res.status(400).json({ error: 'apiKey is required' });
+      return;
+    }
+    if (apiKey.length > 500) {
+      res.status(400).json({ error: 'apiKey is too long' });
+      return;
+    }
+
+    const result = await providerService.rotateKey(req.userId!, req.params.id, apiKey);
+    if (!result.ok) {
+      const isMissing = result.error === 'Provider credential not found';
+      res.status(isMissing ? 404 : 400).json({ error: safeError(result.error) });
+      return;
+    }
+    res.json({
+      credential: result.record,
+      note: 'Your new key is encrypted at rest and will never be shown again.',
+    });
+  } catch (error: any) {
+    console.error('Rotate provider key error:', error);
+    res.status(500).json({ error: 'Failed to rotate provider credential' });
+  }
+});
+
 // DELETE /api/providers/:id
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
   try {

@@ -69,3 +69,27 @@ describe('Settings.assertProductionSafe', () => {
     expect(Settings.assertProductionSafe()).toEqual([]);
   });
 });
+
+describe('Settings.validate / getMaskedKey', () => {
+  it('validates keys with the gsk_ prefix', async () => {
+    vi.stubEnv('GROQ_API_KEY', 'gsk_valid_key_here');
+    const Settings = await loadSettings();
+    expect(Settings.validate()).toBe(true);
+  });
+
+  it('rejects missing or non-gsk keys', async () => {
+    vi.stubEnv('GROQ_API_KEY', '');
+    const Settings = await loadSettings();
+    expect(Settings.validate()).toBe(false);
+  });
+
+  it('masks long keys and reports missing keys', async () => {
+    vi.stubEnv('GROQ_API_KEY', 'gsk_1234567890abcdef');
+    const Settings = await loadSettings();
+    expect(Settings.getMaskedKey()).toBe('gsk_12...cdef');
+
+    vi.stubEnv('GROQ_API_KEY', '');
+    const Unset = await loadSettings();
+    expect(Unset.getMaskedKey()).toBe('NOT SET');
+  });
+});

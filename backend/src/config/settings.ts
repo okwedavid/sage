@@ -38,6 +38,22 @@ export const Settings = {
   // Required in production before users can connect external providers.
   SAGE_CREDENTIAL_ENCRYPTION_KEY: process.env.SAGE_CREDENTIAL_ENCRYPTION_KEY || '',
 
+  // Email (transactional — password resets). Optional: when RESEND_API_KEY is
+  // unset, reset links are returned to the caller in non-production only and
+  // logged (never sent). See services/email.ts.
+  RESEND_API_KEY: (process.env.RESEND_API_KEY || '').trim(),
+  EMAIL_FROM: process.env.EMAIL_FROM || 'SAGE <no-reply@sage.ai>',
+
+  // Stripe (test mode). Optional: when unset, checkout/portal return the
+  // `payment_provider_not_configured` contract and webhooks 501.
+  STRIPE_SECRET_KEY: (process.env.STRIPE_SECRET_KEY || '').trim(),
+  STRIPE_WEBHOOK_SECRET: (process.env.STRIPE_WEBHOOK_SECRET || '').trim(),
+  STRIPE_PRICE_PRO: (process.env.STRIPE_PRICE_PRO || '').trim(),
+  STRIPE_PRICE_TEAM: (process.env.STRIPE_PRICE_TEAM || '').trim(),
+
+  // Password reset
+  PASSWORD_RESET_TTL_MS: Math.max(5 * 60 * 1000, parseInt(process.env.PASSWORD_RESET_TTL_MS || String(60 * 60 * 1000), 10) || 60 * 60 * 1000),
+
   // JWT
   JWT_SECRET: process.env.JWT_SECRET || 'sage-dev-secret',
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',

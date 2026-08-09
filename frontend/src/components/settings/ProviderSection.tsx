@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Cpu, Plus, Loader2, Trash2, Check, Activity, Star, Plug, ShieldCheck } from 'lucide-react';
+import { Cpu, Plus, Loader2, Trash2, Check, Activity, Star, Plug, ShieldCheck, KeyRound } from 'lucide-react';
 import { api } from '@/lib/api';
 
 interface CatalogEntry {
@@ -48,6 +48,9 @@ export function ProviderSection() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [models, setModels] = useState<{ id: string; vision?: boolean }[]>([]);
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const [rotatingFor, setRotatingFor] = useState<string | null>(null);
+  const [newKey, setNewKey] = useState('');
+  const [rotating, setRotating] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -137,6 +140,25 @@ export function ProviderSection() {
       setError(e?.body?.error || 'Health check failed');
     }
     await load();
+  };
+
+  const rotateKey = async (id: string) => {
+    if (!newKey.trim()) {
+      setError('Enter the new API key first');
+      return;
+    }
+    setRotating(true);
+    setError('');
+    try {
+      await api.rotateProviderKey(id, newKey.trim());
+      setNewKey('');
+      setRotatingFor(null);
+      await load(); // refresh status/lastChecked
+    } catch (e: any) {
+      setError(e?.body?.error || e.message || 'Failed to replace key');
+    } finally {
+      setRotating(false);
+    }
   };
 
   const revoke = async (id: string) => {
@@ -353,6 +375,48 @@ export function ProviderSection() {
                       className="text-[11px] text-accent-primary hover:underline flex items-center gap-1"
                     >
                       <Check className="w-3 h-3" /> Load available models
+                    </button>
+                  )}
+                </div>
+
+                {/* Replace / rotate key */}
+                <div className="mt-3">
+                  {rotatingFor === c.id ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <input
+                        type="password"
+                        value={newKey}
+                        onChange={(e) => setNewKey(e.target.value)}
+                        placeholder="New API key"
+                        autoFocus
+                        className="h-9 flex-1 min-w-[160px] px-3 rounded-lg bg-sage-input border border-sage-border text-xs font-mono text-txt-primary placeholder:text-txt-muted focus:outline-none focus:border-accent-primary transition-all"
+                      />
+                      <button
+                        onClick={() => rotateKey(c.id)}
+                        disabled={rotating}
+                        className="h-9 px-3 rounded-lg bg-accent-primary/15 border border-accent-primary/30 text-accent-primary text-xs font-semibold hover:bg-accent-primary/25 transition-all disabled:opacity-50"
+                      >
+                        {rotating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Save new key'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setRotatingFor(null);
+                          setNewKey('');
+                        }}
+                        className="h-9 px-3 rounded-lg text-txt-muted hover:text-txt-primary hover:bg-sage-hover text-xs transition-all"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setRotatingFor(c.id);
+                        setNewKey('');
+                      }}
+                      className="text-[11px] text-txt-muted hover:text-accent-primary flex items-center gap-1 transition-colors"
+                    >
+                      <KeyRound className="w-3 h-3" /> Replace API key
                     </button>
                   )}
                 </div>
