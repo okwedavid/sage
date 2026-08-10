@@ -172,6 +172,45 @@ describe('POST /api/chat — happy paths', () => {
     });
   });
 
+  it('rejects non-object attachments', async () => {
+    await withServer(app, async (baseUrl) => {
+      const { status, body } = await postChat(baseUrl, { message: 'analyze', attachments: null });
+      expect(status).toBe(400);
+      expect(body.error).toBe('Attachments must be an object');
+    });
+  });
+
+  it('rejects unsupported image types and oversized image names', async () => {
+    const png =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    await withServer(app, async (baseUrl) => {
+      const badType = await postChat(baseUrl, {
+        message: 'analyze',
+        attachments: { image_base64: png, image_type: 'bmp' },
+      });
+      expect(badType.status).toBe(400);
+      expect(badType.body.error).toContain('image_type must be one of');
+
+      const longName = await postChat(baseUrl, {
+        message: 'analyze',
+        attachments: { image_base64: png, image_type: 'png', image_name: 'x'.repeat(201) },
+      });
+      expect(longName.status).toBe(400);
+      expect(longName.body.error).toContain('too long');
+    });
+  });
+
+  it('caps oversized history to the last 40 turns', async () => {
+    await withServer(app, async (baseUrl) => {
+      const bigHistory = Array.from({ length: 50 }, (_, i) => ({
+        role: i % 2 === 0 ? 'user' : 'assistant',
+        content: `turn ${i}`,
+      }));
+      const { status } = await postChat(baseUrl, { message: 'continue', history: bigHistory });
+      expect(status).toBe(200);
+    });
+  });
+
   it('rejects non-string attachment values', async () => {
     await withServer(app, async (baseUrl) => {
       const { status, body } = await postChat(baseUrl, {
@@ -340,6 +379,59 @@ describe('POST /api/chat — user-provider routing (Phase 2/3)', () => {
       expect(res.body.response).toBe('Provider-powered reply');
       expect(res.body.provider).toBe('openai');
       expect(res.body.model).toBe('gpt-4o-mini');
+    });
+
+    vi.unstubAllGlobals();
+  });
+
+  it('routes chat through the model the user selected via PATCH', async () => {
+    const token = jwt.sign({ userId: 'model-pick-user', email: 'mp@user.dev' }, Settings.JWT_SECRET);
+    const headers = { Authorization: `Bearer ${token}` };
+
+    stubProviderFetch();
+
+    await withServer(app, async (baseUrl) => {
+      // Connect WITHOUT an explicit model (falls back to the catalog default).
+      const connectRes = await jsonFetch(`${baseUrl}/api/providers/connect`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ provider: 'openai', apiKey: 'sk-test-1234567890abcdef' }),
+      });
+      const providerId = connectRes.body.credential.id;
+
+      // User then selects a specific model in Settings.
+      const patch = await jsonFetch(`${baseUrl}/api/providers/${providerId}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ model: 'gpt-4o' }),
+      });
+      expect(patch.body.credential.model).toBe('gpt-4o');
+
+      providerResponder = async (_url: string, init: any) => {
+        const body = JSON.parse(init?.body || '{}');
+        const isClassifier = String(body?.messages?.[0]?.content || '').includes('SAGE-Classifier');
+        return {
+          ok: true,
+          status: 200,
+          json: async () =>
+            isClassifier
+              ? { choices: [{ message: { content: JSON.stringify({
+                    task_type: 'RESEARCH', target_domain: 'Web', confidence_score: 0.95, priority: 'NORMAL', summary: 'goal' })} }], model: 'gpt-4o' }
+              : { choices: [{ message: { content: 'Picked-model reply' } }], model: 'gpt-4o' },
+        };
+      };
+
+      const res = await jsonFetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ message: 'research model routing', providerId }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.response).toBe('Picked-model reply');
+      expect(res.body.provider).toBe('openai');
+      expect(res.body.model).toBe('gpt-4o'); // the user-selected model
     });
 
     vi.unstubAllGlobals();

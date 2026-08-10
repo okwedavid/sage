@@ -185,4 +185,33 @@ describe('conversations with Supabase', () => {
       expect(status).toBe(404);
     });
   });
+
+  it('returns 500 when listing fails at the persistence layer', async () => {
+    mockSupabase.listConversations.mockRejectedValue(new Error('db unreachable'));
+
+    await withServer(app, async (baseUrl) => {
+      const { status, body } = await jsonFetch(`${baseUrl}/api/conversations`, {
+        headers: authHeaders,
+      });
+      expect(status).toBe(500);
+      expect(body.error).toBe('Failed to list conversations');
+    });
+  });
+
+  it('returns 500 when the DB update fails during title generation', async () => {
+    mockSupabase.getConversation.mockResolvedValue({
+      id: 'c1', title: 'New Conversation', messages: [], userId: 'db-user-1', createdAt: 't', updatedAt: 't',
+    });
+    mockSupabase.updateConversationContent.mockRejectedValue(new Error('write failed'));
+
+    await withServer(app, async (baseUrl) => {
+      const { status, body } = await jsonFetch(`${baseUrl}/api/conversations/c1/messages`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ role: 'user', content: 'hello' }),
+      });
+      expect(status).toBe(500);
+      expect(body.error).toBe('Failed to add message');
+    });
+  });
 });

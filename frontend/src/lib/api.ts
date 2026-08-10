@@ -102,6 +102,21 @@ export const api = {
     return apiFetch('/api/auth/demo', { method: 'POST' });
   },
 
+  // Password reset
+  async requestPasswordReset(email: string) {
+    return apiFetch('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  async resetPassword(token: string, password: string) {
+    return apiFetch('/api/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, password }),
+    });
+  },
+
   // Conversations
   async getConversations() {
     return apiFetch('/api/conversations');
@@ -170,6 +185,13 @@ export const api = {
 
   async revokeProvider(id: string) {
     return apiFetch(`/api/providers/${id}`, { method: 'DELETE' });
+  },
+
+  async rotateProviderKey(id: string, apiKey: string) {
+    return apiFetch(`/api/providers/${id}/rotate`, {
+      method: 'POST',
+      body: JSON.stringify({ apiKey }),
+    });
   },
 
   // Agents
@@ -256,6 +278,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ planId }),
     });
+  },
+
+  async requestBillingPortal() {
+    return apiFetch('/api/billing/portal', { method: 'POST', body: JSON.stringify({}) });
   },
 
   // Admin

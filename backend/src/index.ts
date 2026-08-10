@@ -114,6 +114,9 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // ── Body Parsing ──
+// Stripe webhooks must be verified against the EXACT raw bytes, so this path
+// bypasses JSON parsing (raw Buffer) and is mounted before express.json.
+app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 

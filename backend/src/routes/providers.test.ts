@@ -64,6 +64,7 @@ describe('providers route — auth', () => {
       expect((await jsonFetch(`${baseUrl}/api/providers/x/models`)).status).toBe(401);
       expect((await jsonFetch(`${baseUrl}/api/providers/x/health`, { method: 'POST', body: '{}' })).status).toBe(401);
       expect((await jsonFetch(`${baseUrl}/api/providers/x`, { method: 'PATCH', body: '{}' })).status).toBe(401);
+      expect((await jsonFetch(`${baseUrl}/api/providers/x/rotate`, { method: 'POST', body: '{}' })).status).toBe(401);
       expect((await jsonFetch(`${baseUrl}/api/providers/x`, { method: 'DELETE' })).status).toBe(401);
     });
   });
@@ -200,6 +201,21 @@ describe('providers route — lifecycle', () => {
     });
   });
 
+  it('accepts an empty PATCH as a no-op', async () => {
+    await withServer(app, async (baseUrl) => {
+      const created = await connectOne(baseUrl);
+      const id = created.body.credential.id;
+
+      const res = await jsonFetch(`${baseUrl}/api/providers/${id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({}),
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.credential.id).toBe(id);
+    });
+  });
+
   it('selects a model and validates inputs', async () => {
     await withServer(app, async (baseUrl) => {
       const created = await connectOne(baseUrl);
@@ -286,6 +302,83 @@ describe('providers route — lifecycle', () => {
 
       const gone = await jsonFetch(`${baseUrl}/api/providers/${id}`, { headers });
       expect(gone.status).toBe(404);
+    });
+  });
+});
+
+describe('providers route — key rotation', () => {
+  it('rotates a key after validating the new one and never reveals it', async () => {
+    await withServer(app, async (baseUrl) => {
+      const created = await connectOne(baseUrl);
+      const id = created.body.credential.id;
+
+      const rotated = await jsonFetch(`${baseUrl}/api/providers/${id}/rotate`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ apiKey: 'sk-new-key-abcdef123456' }),
+      });
+      expect(rotated.status).toBe(200);
+      expect(rotated.body.credential.id).toBe(id);
+      expect(rotated.body.credential.status).toBe('active');
+      const serialized = JSON.stringify(rotated.body);
+      expect(serialized).not.toContain('sk-new-key-abcdef123456');
+      expect(serialized).not.toContain('encrypted_key');
+      expect(serialized).not.toContain('encryptedKey');
+    });
+  });
+
+  it('does not overwrite a working key with an invalid one', async () => {
+    await withServer(app, async (baseUrl) => {
+      const created = await connectOne(baseUrl);
+      const id = created.body.credential.id;
+
+      // New key fails validation against the provider.
+      providerResponder = async () => jsonResponse(401, { error: { message: 'Incorrect API key' } });
+      const bad = await jsonFetch(`${baseUrl}/api/providers/${id}/rotate`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ apiKey: 'sk-invalid-new-key' }),
+      });
+      expect(bad.status).toBe(400);
+      expect(bad.body.error).toContain('Incorrect API key');
+
+      // The original key still works (health check passes).
+      providerResponder = async () => jsonResponse(200, { choices: [{ message: { content: 'ok' } }] });
+      const health = await jsonFetch(`${baseUrl}/api/providers/${id}/health`, {
+        method: 'POST',
+        headers,
+        body: '{}',
+      });
+      expect(health.body.ok).toBe(true);
+    });
+  });
+
+  it('validates rotate inputs and enforces ownership', async () => {
+    await withServer(app, async (baseUrl) => {
+      const created = await connectOne(baseUrl);
+      const id = created.body.credential.id;
+
+      const noKey = await jsonFetch(`${baseUrl}/api/providers/${id}/rotate`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+      });
+      expect(noKey.status).toBe(400);
+      expect(noKey.body.error).toContain('apiKey is required');
+
+      const hugeKey = await jsonFetch(`${baseUrl}/api/providers/${id}/rotate`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ apiKey: 'x'.repeat(600) }),
+      });
+      expect(hugeKey.status).toBe(400);
+
+      const foreign = await jsonFetch(`${baseUrl}/api/providers/${id}/rotate`, {
+        method: 'POST',
+        headers: otherHeaders,
+        body: JSON.stringify({ apiKey: 'sk-foreign-key' }),
+      });
+      expect(foreign.status).toBe(404);
     });
   });
 });

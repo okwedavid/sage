@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-08-09
+
+### Added
+- **Password reset** — `POST /api/auth/forgot-password` and `POST /api/auth/reset-password` with one-time, expiring SHA-256-hashed tokens (migration `006`), per-IP rate limits, account-enumeration-safe responses, and Resend transactional email delivery (`RESEND_API_KEY`). In non-production without SMTP the reset link is returned as `devResetUrl`; the frontend auth modal gains forgot/reset views and deep-links via `?reset_token=…`.
+- **Stripe billing (live)** — the v1.1 checkout/portal hooks are now real: `createCheckoutSession` (recurring prices), billing portal, and a signature-verified webhook (`POST /api/billing/webhook`) handling `checkout.session.completed`, `subscription.updated/deleted`, and invoice events, with `stripe_events` idempotency (migration `006`). Activates in test mode when `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`/`STRIPE_PRICE_PRO`/`STRIPE_PRICE_TEAM` are set; otherwise returns the documented `payment_provider_not_configured` contract.
+- **Provider key rotation** — `POST /api/providers/:id/rotate`: the new key is live-validated against the provider *before* it replaces the old one, so a bad key can never clobber a working credential. UI in Settings → Providers.
+- **Chat hardening** — attachments must be an object; `image_type` restricted to jpg/jpeg/png/webp/gif; `image_name` length-bounded; oversized history capped to the last 40 turns.
+
+### Security
+- Reset tokens are 32-byte random values; only their SHA-256 hash is persisted; single-use with TTL (default 1h) and post-success revocation of all outstanding tokens.
+- Forgot-password returns a uniform response whether or not the account exists (no user enumeration); production never returns the reset link in the API response.
+- Stripe webhook payloads verified via `constructEvent` (raw body), invalid signatures → 400; events idempotently deduped so Stripe retries are safe.
+- Reset/forgot endpoints rate-limited per IP (env-tunable).
+
+### Fixed
+- Provider key rotation previously required revoke + reconnect; now atomic and validated.
+- Billing docs/env now reflect real Stripe wiring instead of the placeholder contract.
+
+### Verified
+- Backend: **550 tests / 55 files** passing; typechecks (app + tests) + lint clean; frontend build + lint clean.
+
 ## [1.2.0] - 2026-08-08
 
 ### Added
@@ -66,7 +87,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Payment provider (Stripe) integration via the checkout/webhook contract.
 - AgentFinance worker implementation (finance data provider + premium gate).
 
 ## [1.0.0-beta] - 2026-08-05

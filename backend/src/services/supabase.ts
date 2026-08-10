@@ -137,6 +137,22 @@ export async function createUser(input: {
   return data as UserRecord;
 }
 
+export async function updateUserPassword(userId: string, passwordHash: string): Promise<boolean> {
+  const db = getSupabase();
+  if (!db) return false;
+
+  const { error } = await db
+    .from('users')
+    .update({ password_hash: passwordHash, updated_at: new Date().toISOString() })
+    .eq('id', userId);
+
+  if (error) {
+    console.error('Failed to update user password:', error.message);
+    return false;
+  }
+  return true;
+}
+
 export async function setUserBanned(userId: string, banned: boolean): Promise<boolean> {
   const db = getSupabase();
   if (!db) return false;
@@ -641,6 +657,7 @@ export async function updateProviderCredential(
     status?: string;
     last_error?: string | null;
     last_checked_at?: string;
+    encrypted_key?: string;
   }
 ): Promise<boolean> {
   const db = getSupabase();
@@ -670,6 +687,143 @@ export async function deleteProviderCredential(userId: string, id: string): Prom
     return false;
   }
   return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Password resets
+//
+// Only the SHA-256 hash of the reset token is stored (never the token). Rows
+// are single-use: consumed on success, expired via TTL, deleted on use.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface PasswordResetRow {
+  id: string;
+  user_id: string;
+  token_hash: string;
+  expires_at: string;
+  used_at: string | null;
+  created_at: string;
+}
+
+export async function createPasswordReset(input: {
+  userId: string;
+  tokenHash: string;
+  expiresAt: string;
+  ip?: string;
+  userAgent?: string;
+}): Promise<PasswordResetRow | null> {
+  const db = getSupabase();
+  if (!db) return null;
+
+  const { data, error } = await db
+    .from('password_resets')
+    .insert({
+      user_id: input.userId,
+      token_hash: input.tokenHash,
+      expires_at: input.expiresAt,
+      ip: input.ip || null,
+      user_agent: input.userAgent || null,
+    })
+    .select('*')
+    .single();
+
+  if (error) {
+    console.error('Failed to create password reset:', error.message);
+    return null;
+  }
+  return (data as PasswordResetRow) || null;
+}
+
+/** Look up an unused, unexpired reset by token hash. */
+export async function findActivePasswordReset(tokenHash: string): Promise<PasswordResetRow | null> {
+  const db = getSupabase();
+  if (!db) return null;
+
+  const { data, error } = await db
+    .from('password_resets')
+    .select('*')
+    .eq('token_hash', tokenHash)
+    .is('used_at', null)
+    .gt('expires_at', new Date().toISOString())
+    .maybeSingle();
+
+  if (error) {
+    console.error('Failed to find password reset:', error.message);
+    return null;
+  }
+  return (data as PasswordResetRow) || null;
+}
+
+/** Mark a reset token consumed (single-use). */
+export async function consumePasswordReset(id: string): Promise<boolean> {
+  const db = getSupabase();
+  if (!db) return false;
+
+  const { error } = await db
+    .from('password_resets')
+    .update({ used_at: new Date().toISOString() })
+    .eq('id', id);
+
+  if (error) {
+    console.error('Failed to consume password reset:', error.message);
+    return false;
+  }
+  return true;
+}
+
+/** Remove all outstanding resets for a user (post-success hygiene). */
+export async function revokePasswordResets(userId: string): Promise<void> {
+  const db = getSupabase();
+  if (!db) return;
+
+  await db.from('password_resets').delete().eq('user_id', userId);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stripe webhook idempotency
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function hasStripeEvent(eventId: string): Promise<boolean> {
+  const db = getSupabase();
+  if (!db) return false;
+
+  const { data, error } = await db.from('stripe_events').select('id').eq('id', eventId).maybeSingle();
+  if (error) {
+    console.error('Failed to check stripe event:', error.message);
+    return false;
+  }
+  return Boolean(data);
+}
+
+export async function recordStripeEvent(eventId: string, type: string): Promise<void> {
+  const db = getSupabase();
+  if (!db) return;
+
+  const { error } = await db.from('stripe_events').insert({ id: eventId, type });
+  if (error && error.code !== '23505') {
+    console.error('Failed to record stripe event:', error.message);
+  }
+}
+
+/** The user's latest Stripe customer id (for the billing portal). */
+export async function getStripeCustomerId(userId: string): Promise<string | null> {
+  const db = getSupabase();
+  if (!db) return null;
+
+  const { data, error } = await db
+    .from('subscriptions')
+    .select('stripe_customer_id')
+    .eq('user_id', userId)
+    .not('stripe_customer_id', 'is', null)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Failed to fetch stripe customer id:', error.message);
+    return null;
+  }
+  return (data?.stripe_customer_id as string) || null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

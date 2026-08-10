@@ -4,6 +4,46 @@ A chronological log of engineering sessions on the SAGE platform.
 
 ---
 
+## Session 2026-08-09 — Milestone v1.3: Monetization + Account Security
+
+**Branch:** `feature/v1.1-production-platform` (continued)
+
+### Password reset (account recovery)
+- `POST /api/auth/forgot-password` + `POST /api/auth/reset-password`:
+  one-time SHA-256-hashed tokens (32-byte random), TTL (default 1h),
+  single-use, all outstanding tokens revoked after success. Per-IP rate
+  limits (env-tunable). Uniform 200 on unknown emails — no enumeration.
+- Resend delivery (`services/email.ts`) — optional; without a key the reset
+  link is returned as `devResetUrl` in non-production only, logged otherwise.
+- Frontend auth modal: forgot/reset views, `?reset_token=…` deep-link with
+  token stripped from URL history.
+
+### Stripe billing (live)
+- `services/stripe.ts`: `createCheckoutSession` (recurring pro/team prices),
+  `createPortalSession`, `verifyWebhook` (raw-body signature check) and
+  idempotent `processStripeEvent` over checkout/subscription/invoice events.
+- `POST /api/billing/webhook` mounted as `express.raw` in `index.ts` so
+  signatures verify against exact bytes. `stripe_events` dedupe table
+  (migration 006) makes Stripe retries safe.
+- Checkout/portal now live; still return the `payment_provider_not_configured`
+  contract until the four Stripe env vars are set.
+
+### Provider key rotation
+- `ProviderService.rotateKey` — new key live-validated BEFORE it replaces the
+  old one; bad keys never clobber working credentials. `POST
+  /api/providers/:id/rotate` + Settings → Providers UI.
+
+### Chat hardening
+- Attachments must be an object; `image_type` whitelist; `image_name`
+  bounded; history capped to last 40 turns.
+
+### Delivery
+- Changelog + release notes + API docs + env templates updated for v1.3.
+  Suite: **550 tests / 55 files**, all passing; typecheck (app + tests) +
+  lint clean; frontend build clean.
+
+---
+
 ## Session 2026-08-08 — Milestone v1.2: BYO Providers + Memory + Security
 
 **Branch:** `feature/v1.1-production-platform` (continued)

@@ -3,21 +3,113 @@
  */
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppStore } from '@/stores/appStore';
 import { api } from '@/lib/api';
-import { Brain, ArrowRight, Sparkles, Shield, Zap, Globe, Eye, Code } from 'lucide-react';
+import { Brain, ArrowRight, Sparkles, Shield, Zap, Globe, Eye, Code, KeyRound, MailCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
+
+/**
+ * Auth modal views: sign-in / register / forgot-password / reset-password.
+ * The reset view is entered directly when the app loads with a
+ * `?reset_token=...` URL (from the password reset email).
+ */
+type AuthView = 'login' | 'forgot' | 'reset';
 
 export function LandingPage() {
   const [showLogin, setShowLogin] = useState(false);
+  const [authView, setAuthView] = useState<AuthView>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Password reset
+  const [resetToken, setResetToken] = useState<string | null>(null);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetInfo, setResetInfo] = useState('');
+  const [devResetUrl, setDevResetUrl] = useState('');
+  const [loginNotice, setLoginNotice] = useState('');
   const { setUser } = useAppStore();
+
+  // Enter the reset view directly when the app loads with a reset link.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('reset_token');
+    if (token) {
+      setResetToken(token);
+      setAuthView('reset');
+      setShowLogin(true);
+      // Remove the token from the URL so it never lingers in history.
+      params.delete('reset_token');
+      const next = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
+      window.history.replaceState({}, '', next);
+    }
+  }, []);
+
+  const openAuth = (view: AuthView) => {
+    setAuthView(view);
+    setError('');
+    setLoginNotice('');
+    setShowLogin(true);
+  };
+
+  const handleForgotPassword = async () => {
+    setLoading(true);
+    setError('');
+    setResetInfo('');
+    try {
+      const result = await api.requestPasswordReset(email);
+      setResetInfo(
+        result?.message ||
+          'If an account exists for that email, a password reset link has been sent.'
+      );
+      // Development-only convenience: without SMTP the backend returns the
+      // reset link directly. Never shown in production.
+      if (result?.devResetUrl) {
+        setDevResetUrl(result.devResetUrl);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to request password reset');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    setLoading(true);
+    setError('');
+    setLoginNotice('');
+    try {
+      if (password.length < 6) {
+        setError('Password must be at least 6 characters');
+        setLoading(false);
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError('Passwords do not match');
+        setLoading(false);
+        return;
+      }
+      if (!resetToken) {
+        setError('This reset link is missing its token. Please request a new one.');
+        setLoading(false);
+        return;
+      }
+      const result = await api.resetPassword(resetToken, password);
+      setLoginNotice(result?.message || 'Password updated. You can now sign in with your new password.');
+      setPassword('');
+      setConfirmPassword('');
+      setResetToken(null);
+      setAuthView('login');
+    } catch (err: any) {
+      setError(err.message || 'Failed to reset password');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAuth = async () => {
     setLoading(true);
@@ -270,7 +362,7 @@ export function LandingPage() {
         </motion.div>
       </div>
 
-      {/* Login/Register Modal */}
+      {/* Auth Modal — login / register / forgot / reset */}
       {showLogin && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -286,14 +378,32 @@ export function LandingPage() {
           >
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 rounded-[12px] bg-gradient-primary flex items-center justify-center">
-                <Brain className="w-5 h-5 text-white" />
+                {authView === 'login' ? (
+                  <Brain className="w-5 h-5 text-white" />
+                ) : authView === 'forgot' ? (
+                  <MailCheck className="w-5 h-5 text-white" />
+                ) : (
+                  <KeyRound className="w-5 h-5 text-white" />
+                )}
               </div>
               <div>
                 <h2 className="font-display text-xl font-bold text-txt-primary">
-                  {isRegister ? 'Create Account' : 'Welcome Back'}
+                  {authView === 'forgot'
+                    ? 'Forgot Password'
+                    : authView === 'reset'
+                      ? 'Set New Password'
+                      : isRegister
+                        ? 'Create Account'
+                        : 'Welcome Back'}
                 </h2>
                 <p className="text-xs text-txt-muted">
-                  {isRegister ? 'Join SAGE' : 'Sign in to continue'}
+                  {authView === 'forgot'
+                    ? 'We\u2019ll email you a secure reset link'
+                    : authView === 'reset'
+                      ? 'Choose a new password for your account'
+                      : isRegister
+                        ? 'Join SAGE'
+                        : 'Sign in to continue'}
                 </p>
               </div>
             </div>
@@ -304,63 +414,168 @@ export function LandingPage() {
               </div>
             )}
 
-            <div className="space-y-3">
-              {isRegister && (
+            {loginNotice && authView === 'login' && (
+              <div className="bg-status-success/10 border border-status-success/20 rounded-xl px-4 py-2.5 mb-4 text-status-success text-sm">
+                {loginNotice}
+              </div>
+            )}
+
+            {authView === 'forgot' && (
+              <div className="space-y-4">
+                {resetInfo ? (
+                  <div className="space-y-4">
+                    <p className="text-sm text-txt-secondary leading-relaxed">{resetInfo}</p>
+                    {devResetUrl && (
+                      <a
+                        href={devResetUrl}
+                        className="block text-xs font-mono text-accent-primary hover:underline break-all"
+                      >
+                        Development mode reset link: {devResetUrl}
+                      </a>
+                    )}
+                    <button
+                      onClick={() => {
+                        setAuthView('login');
+                        setResetInfo('');
+                        setDevResetUrl('');
+                      }}
+                      className="w-full btn-ghost py-3 text-sm"
+                    >
+                      Back to Sign In
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      type="email"
+                      placeholder="Email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleForgotPassword()}
+                      className="w-full h-11 px-4 rounded-xl bg-sage-input border border-sage-border text-txt-primary text-sm placeholder:text-txt-muted focus:outline-none focus:border-accent-primary focus:shadow-glow-sm transition-all"
+                    />
+                    <button
+                      onClick={handleForgotPassword}
+                      disabled={loading}
+                      className="w-full btn-primary py-3 text-sm"
+                    >
+                      {loading ? 'Sending...' : 'Send Reset Link'}
+                    </button>
+                    <button
+                      onClick={() => openAuth('login')}
+                      className="w-full btn-ghost py-3 text-sm"
+                    >
+                      Back to Sign In
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {authView === 'reset' && (
+              <div className="space-y-3">
                 <input
-                  type="text"
-                  placeholder="Full name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  type="password"
+                  placeholder="New password (min 6 chars)"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="w-full h-11 px-4 rounded-xl bg-sage-input border border-sage-border text-txt-primary text-sm placeholder:text-txt-muted focus:outline-none focus:border-accent-primary focus:shadow-glow-sm transition-all"
                 />
-              )}
-              <input
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full h-11 px-4 rounded-xl bg-sage-input border border-sage-border text-txt-primary text-sm placeholder:text-txt-muted focus:outline-none focus:border-accent-primary focus:shadow-glow-sm transition-all"
-              />
-              <input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAuth()}
-                className="w-full h-11 px-4 rounded-xl bg-sage-input border border-sage-border text-txt-primary text-sm placeholder:text-txt-muted focus:outline-none focus:border-accent-primary focus:shadow-glow-sm transition-all"
-              />
-            </div>
+                <input
+                  type="password"
+                  placeholder="Confirm new password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleResetPassword()}
+                  className="w-full h-11 px-4 rounded-xl bg-sage-input border border-sage-border text-txt-primary text-sm placeholder:text-txt-muted focus:outline-none focus:border-accent-primary focus:shadow-glow-sm transition-all"
+                />
+                <button
+                  onClick={handleResetPassword}
+                  disabled={loading}
+                  className="w-full btn-primary py-3 text-sm mt-2"
+                >
+                  {loading ? 'Updating...' : 'Update Password'}
+                </button>
+                <button
+                  onClick={() => openAuth('login')}
+                  className="w-full btn-ghost py-3 text-sm"
+                >
+                  Back to Sign In
+                </button>
+              </div>
+            )}
 
-            <div className="mt-6 space-y-3">
-              <button
-                onClick={handleAuth}
-                disabled={loading}
-                className="w-full btn-primary py-3 text-sm"
-              >
-                {loading ? 'Processing...' : isRegister ? 'Create Account' : 'Sign In'}
-              </button>
+            {authView === 'login' && (
+              <>
+                <div className="space-y-3">
+                  {isRegister && (
+                    <input
+                      type="text"
+                      placeholder="Full name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full h-11 px-4 rounded-xl bg-sage-input border border-sage-border text-txt-primary text-sm placeholder:text-txt-muted focus:outline-none focus:border-accent-primary focus:shadow-glow-sm transition-all"
+                    />
+                  )}
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full h-11 px-4 rounded-xl bg-sage-input border border-sage-border text-txt-primary text-sm placeholder:text-txt-muted focus:outline-none focus:border-accent-primary focus:shadow-glow-sm transition-all"
+                  />
+                  <div>
+                    <input
+                      type="password"
+                      placeholder="Password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAuth()}
+                      className="w-full h-11 px-4 rounded-xl bg-sage-input border border-sage-border text-txt-primary text-sm placeholder:text-txt-muted focus:outline-none focus:border-accent-primary focus:shadow-glow-sm transition-all"
+                    />
+                    <div className="mt-1.5 text-right">
+                      <button
+                        onClick={() => openAuth('forgot')}
+                        className="text-xs text-accent-primary hover:underline"
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
+                  </div>
+                </div>
 
-              <button
-                onClick={handleDemo}
-                disabled={loading}
-                className="w-full btn-ghost py-3 text-sm"
-              >
-                Try Demo (No Account)
-              </button>
-            </div>
+                <div className="mt-6 space-y-3">
+                  <button
+                    onClick={handleAuth}
+                    disabled={loading}
+                    className="w-full btn-primary py-3 text-sm"
+                  >
+                    {loading ? 'Processing...' : isRegister ? 'Create Account' : 'Sign In'}
+                  </button>
 
-            <div className="mt-4 text-center text-sm text-txt-muted">
-              {isRegister ? 'Already have an account? ' : "Don't have an account? "}
-              <button
-                onClick={() => {
-                  setIsRegister(!isRegister);
-                  setError('');
-                }}
-                className="text-accent-primary hover:underline"
-              >
-                {isRegister ? 'Sign In' : 'Register'}
-              </button>
-            </div>
+                  <button
+                    onClick={handleDemo}
+                    disabled={loading}
+                    className="w-full btn-ghost py-3 text-sm"
+                  >
+                    Try Demo (No Account)
+                  </button>
+                </div>
+
+                <div className="mt-4 text-center text-sm text-txt-muted">
+                  {isRegister ? 'Already have an account? ' : "Don't have an account? "}
+                  <button
+                    onClick={() => {
+                      setIsRegister(!isRegister);
+                      setError('');
+                    }}
+                    className="text-accent-primary hover:underline"
+                  >
+                    {isRegister ? 'Sign In' : 'Register'}
+                  </button>
+                </div>
+              </>
+            )}
           </motion.div>
         </motion.div>
       )}

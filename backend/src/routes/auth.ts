@@ -14,7 +14,19 @@ import { v4 as uuidv4 } from 'uuid';
 import { randomBytes, scrypt as scryptCb, timingSafeEqual, createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 import { Settings } from '../config/settings';
-import { isSupabaseConfigured, createUser, findUserByEmail, findUserById, recordAudit } from '../services/supabase';
+import {
+  isSupabaseConfigured,
+  createUser,
+  findUserByEmail,
+  findUserById,
+  recordAudit,
+  createPasswordReset,
+  findActivePasswordReset,
+  consumePasswordReset,
+  revokePasswordResets,
+  updateUserPassword,
+} from '../services/supabase';
+import { sendPasswordResetEmail } from '../services/email';
 
 const router = Router();
 
@@ -32,6 +44,25 @@ const registerLimiter = rateLimit({
   windowMs: Settings.LOGIN_RATE_LIMIT_WINDOW_MS,
   max: Math.max(Settings.LOGIN_RATE_LIMIT_MAX * 2, 20),
   message: { error: 'Too many registration attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Tight limiter for reset requests: prevents mass emailing / token spraying
+// while still allowing a handful of legitimate attempts. Max is env-tunable
+// so test suites can raise it without changing production defaults.
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Math.max(1, parseInt(process.env.FORGOT_PASSWORD_RATE_LIMIT_MAX || '5', 10) || 5),
+  message: { error: 'Too many reset requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const resetPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Math.max(1, parseInt(process.env.RESET_PASSWORD_RATE_LIMIT_MAX || '10', 10) || 10),
+  message: { error: 'Too many reset attempts, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -61,6 +92,10 @@ async function verifyPassword(password: string, stored: string): Promise<boolean
 
 // In-memory fallback user store (only when Supabase is not configured)
 const users: Map<string, { id: string; email: string; password: string; name: string; bannedUntil?: string }> = new Map();
+
+// In-memory fallback for password reset tokens (only when Supabase is not
+// configured). Stores only the token HASH — never the token itself.
+const memResets = new Map<string, { userId: string; expiresAt: string; used: boolean }>();
 
 /**
  * Demo-mode user lookup by email. Used by the organizations route to resolve
@@ -224,6 +259,148 @@ router.get('/me', async (req: Request, res: Response) => {
     console.error('Me error:', error);
     res.status(500).json({ error: 'Failed to resolve user' });
   }
+});
+
+// POST /api/auth/forgot-password — request a password reset link
+//
+// SECURITY:
+//   - Uniform 200 response whether or not the account exists (no enumeration).
+//   - Rate-limited per IP (5 / 15 min).
+//   - Tokens are random 32-byte values; only their SHA-256 hash is stored.
+//   - Tokens expire after PASSWORD_RESET_TTL_MS (default 1 hour).
+//   - In non-production, when no email provider is configured, the reset link
+//     is returned as `devResetUrl` so local flows work without SMTP. In
+//     production the link is only delivered by email (RESEND_API_KEY).
+router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res: Response) => {
+  const { email } = req.body || {};
+
+  if (typeof email !== 'string' || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    res.status(400).json({ error: 'Invalid email address' });
+    return;
+  }
+
+  const generic = { message: 'If an account exists for that email, a password reset link has been sent.' };
+
+  // Resolve the account WITHOUT revealing whether it exists.
+  let userId: string | null = null;
+  if (isSupabaseConfigured()) {
+    const user = await findUserByEmail(email);
+    if (user?.password_hash) userId = user.id;
+  } else {
+    const memUser = users.get(email.toLowerCase());
+    if (memUser) userId = memUser.id;
+  }
+
+  if (!userId) {
+    res.json(generic);
+    return;
+  }
+
+  const token = randomBytes(32).toString('hex');
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  const expiresAt = new Date(Date.now() + Settings.PASSWORD_RESET_TTL_MS).toISOString();
+
+  let stored = false;
+  if (isSupabaseConfigured()) {
+    const row = await createPasswordReset({
+      userId,
+      tokenHash,
+      expiresAt,
+      ip: clientIp(req),
+      userAgent: req.headers['user-agent'] as string,
+    });
+    stored = Boolean(row);
+  } else {
+    memResets.set(tokenHash, { userId, expiresAt, used: false });
+    stored = true;
+  }
+
+  if (!stored) {
+    console.error('Password reset persistence failed — no reset issued');
+    res.json(generic);
+    return;
+  }
+
+  await recordAudit({
+    actorType: 'user',
+    actorId: userId,
+    action: 'auth.password_reset_requested',
+    resource: email,
+    ip: clientIp(req),
+    userAgent: req.headers['user-agent'] as string,
+  });
+
+  const resetUrl = `${Settings.FRONTEND_URL}/?reset_token=${token}`;
+  const sent = await sendPasswordResetEmail(email, resetUrl);
+
+  if (sent) {
+    res.json(generic);
+    return;
+  }
+  if (Settings.NODE_ENV !== 'production') {
+    // Dev convenience only — never returned in production.
+    res.json({ ...generic, devResetUrl: resetUrl });
+    return;
+  }
+  console.warn('[auth] RESEND_API_KEY not configured — password reset email not sent');
+  res.json(generic);
+});
+
+// POST /api/auth/reset-password — set a new password with a valid token
+router.post('/reset-password', resetPasswordLimiter, async (req: Request, res: Response) => {
+  const { token, password } = req.body || {};
+
+  if (typeof token !== 'string' || !token.trim()) {
+    res.status(400).json({ error: 'Reset token is required' });
+    return;
+  }
+  if (typeof password !== 'string' || password.length < 6) {
+    res.status(400).json({ error: 'Password must be at least 6 characters' });
+    return;
+  }
+
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+
+  if (isSupabaseConfigured()) {
+    const reset = await findActivePasswordReset(tokenHash);
+    if (!reset) {
+      // Expired, already used, or unknown — same message, no oracle.
+      res.status(400).json({ error: 'Invalid or expired reset link. Please request a new one.' });
+      return;
+    }
+
+    const passwordHash = await hashPassword(password);
+    const updated = await updateUserPassword(reset.user_id, passwordHash);
+    if (!updated) {
+      res.status(500).json({ error: 'Failed to update password. Please try again.' });
+      return;
+    }
+
+    await consumePasswordReset(reset.id);
+    await revokePasswordResets(reset.user_id);
+    await recordAudit({
+      actorType: 'user',
+      actorId: reset.user_id,
+      action: 'auth.password_reset',
+      ip: clientIp(req),
+      userAgent: req.headers['user-agent'] as string,
+    });
+    res.json({ message: 'Password updated. You can now sign in with your new password.' });
+    return;
+  }
+
+  // In-memory fallback
+  const memReset = memResets.get(tokenHash);
+  const memUser = memReset ? Array.from(users.values()).find((u) => u.id === memReset.userId) : undefined;
+  if (!memReset || memReset.used || new Date(memReset.expiresAt).getTime() < Date.now() || !memUser) {
+    res.status(400).json({ error: 'Invalid or expired reset link. Please request a new one.' });
+    return;
+  }
+
+  memUser.password = await hashPassword(password);
+  memReset.used = true;
+  memResets.delete(tokenHash);
+  res.json({ message: 'Password updated. You can now sign in with your new password.' });
 });
 
 // POST /api/auth/demo — instant demo access (never persisted)
