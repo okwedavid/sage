@@ -99,7 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Regression tests**: pin every previously-fixed bug (emoji whitespace, whitespace-only input, supplemental emoji ranges, forward/backward lifecycle transitions, terminal statuses).
 - **Test infrastructure**: `vitest.config.ts` with enforced coverage thresholds (lines/statements/functions ≥ 90%, branches ≥ 80%), `@vitest/coverage-v8`, `tsconfig.test.json` + `typecheck:tests` script (test files now typechecked), shared HTTP test helpers.
 - **Coverage tooling & docs**: `TESTING.md`, `PRODUCTION_READINESS.md`, npm scripts `test:coverage`, `typecheck`, `typecheck:tests`.
-- Frontend: pinned `@next/swc-win32-x64-msvc` for reliable local installs on Windows.
+- Frontend: SWC platform binaries come from Next.js's built-in optional dependencies (the temporary `@next/swc-win32-x64-msvc` pin was later removed — as a mandatory dependency it broke Linux/Vercel installs with EBADPLATFORM).
 
 ### Changed
 - **Auth**: passwords are now scrypt-hashed with per-user salt and verified via `timingSafeEqual` (previously stored in plaintext). Minimum password length of 6 enforced at registration.
