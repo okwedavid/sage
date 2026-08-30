@@ -157,7 +157,7 @@ export function BillingPage() {
                 </span>
               </div>
               <p className="text-txt-secondary text-sm mb-4">
-                {current?.plan.priceUsdCents === 0 ? 'Free forever — no card required' : `${priceLabel(current!.plan.priceUsdCents)}/month`}
+                {current?.plan.priceUsdCents === 0 ? 'Free forever — no card required' : current ? `${priceLabel(current.plan.priceUsdCents)}/month` : 'Loading plan...'}
               </p>
               <ul className="space-y-2">
                 {(current?.plan.features || []).map((f) => (
@@ -166,7 +166,7 @@ export function BillingPage() {
                   </li>
                 ))}
               </ul>
-              {current?.subscription.status && current.subscription.status !== 'active' && (
+              {current?.subscription?.status && current.subscription.status !== 'active' && (
                 <p className="mt-4 text-xs text-txt-muted">Status: {current.subscription.status}</p>
               )}
               {isPaidPlan && (
@@ -187,12 +187,12 @@ export function BillingPage() {
               </h2>
               {current?.quota.unlimited ? (
                 <p className="text-sm text-txt-secondary mt-2">Unlimited requests on your plan.</p>
-              ) : (
+              ) : current ? (
                 <>
                   <div className="flex items-end justify-between mt-4 mb-2">
                     <span className="font-mono text-3xl font-bold text-txt-primary">
-                      {current?.quota.used ?? 0}
-                      <span className="text-base font-normal text-txt-muted"> / {current?.quota.limit}</span>
+                      {current.quota.used ?? 0}
+                      <span className="text-base font-normal text-txt-muted"> / {current.quota.limit}</span>
                     </span>
                     <span className="text-xs font-mono text-txt-muted">requests today</span>
                   </div>
@@ -205,9 +205,9 @@ export function BillingPage() {
                     />
                   </div>
                   <p className="text-xs text-txt-muted mt-2">
-                    {current!.quota.remaining} request{current!.quota.remaining === 1 ? '' : 's'} remaining today. Resets at midnight UTC.
+                    {current.quota.remaining} request{current.quota.remaining === 1 ? '' : 's'} remaining today. Resets at midnight UTC.
                   </p>
-                  {current!.quota.remaining <= 0 && (
+                  {current.quota.remaining <= 0 && (
                     <p className="text-xs text-status-error mt-1 font-medium">
                       Limit reached — requests will be rejected until the daily reset.
                     </p>
@@ -218,6 +218,8 @@ export function BillingPage() {
                     </p>
                   )}
                 </>
+              ) : (
+                <p className="text-sm text-txt-muted mt-2">Unable to load usage data.</p>
               )}
             </motion.div>
           </div>
