@@ -4,6 +4,68 @@ A chronological log of engineering sessions on the SAGE platform.
 
 ---
 
+## Session 2026-08-30 — Public Readiness Audit Remediation
+
+**Branch:** `fix/public-readiness-audit`
+
+Forensic audit (August 26) scored public readiness 38/100 with 5 P0 and 6 P1
+issues. This session remediated every P0/P1 item, verified the whole stack,
+and updated the audit/doc artifacts. No deployment, no push to main.
+
+### Security fixes
+- **CORS wildcard removed** (`backend/src/index.ts`): the `*.vercel.app`
+  catch-all is gone — only the exact configured deployment and local dev
+  origins are allowed. Enforced for simple and preflight (OPTIONS) requests;
+  `security.test.ts` rewritten to assert 403 for arbitrary Vercel origins and
+  preflight requests, 200/204 for allowed origins.
+- **`jwtOrApiKey` hardening** (`backend/src/middleware/api-key.ts`): invalid,
+  revoked, or expired keys now get **401**; daily-quota-exhausted keys get
+  **429** — no more silently dropping into unauthenticated mode. New tests
+  cover both paths (401 invalid key, 429 quota-exceeded key).
+
+### Frontend fixes
+- `ErrorBoundary.tsx` (new) wraps the landing page and dashboard — a
+  component crash no longer white-screens the app.
+- Admin exposure: `isAdmin` returned by all auth endpoints; sidebar nav
+  filtered; `AdminDenied` guard in `page.tsx` for non-admin access.
+- Conversation persistence: sidebar now fetches the full conversation by id on
+  open (`GET /api/conversations/:id`) instead of trusting the stale cached
+  list; mount-time session refresh via `api.getMe()` (logout on 401).
+- Removed fake affordances: Composer Mic ("voice input") + Paste-URL buttons;
+  Settings TTS toggle; Inspector Image Gen / Voice Input / Text-to-Speech
+  tools (no implementation existed — hidden rather than left half-wired).
+- Removed legacy `sage_custom_api_key` / `sage_custom_model` localStorage
+  flow from Settings + API client; leftover values scrubbed on mount.
+- Version: product surfaced as `SAGE v1.0.0` (Settings) / `SAGE v1.0`
+  (Inspector) via `PRODUCT_VERSION = '1.0.0'`; engine `7.1` stays internal.
+- Billing page null-guarded (no crash when plan unavailable).
+
+### Verification (all green)
+- Backend: **555 tests / 55 files** passing (`npx vitest run`,
+  one-shot — note `npm test` maps to vitest watch mode).
+- Coverage: **93.12% lines / 80.06% branches / 94.86% functions /
+  93.12% statements** — all thresholds enforced by CI config.
+- Frontend: `tsc --noEmit` clean, `next lint` clean, production `next build`
+  green.
+- Verified end-to-end by passing suites: conversation persistence, server-side
+  admin authorization, billing-unconfigured contract (501 + documented error)
+  and live Stripe paths, organizations, and the API-key generator.
+
+### Known remaining (P2, non-blocking)
+- Inspector hardcoded "4.2s" average response time; engine status always
+  "Online"; no delete-conversation confirmation; in-memory email case
+  sensitivity; 100-entry FIFO pipeline cache; `console.log`s in prod routes;
+  Composer alert() error UX; no conversation pagination (12 shown);
+  `react-hot-toast` unused. Frontend version labels still hardcode `v1.0`/
+  `v1.0.0` instead of reading `PRODUCT_VERSION` from the API.
+
+### Delivery
+- `PUBLIC_READINESS_AUDIT.md` resolution status + updated markers/test
+  results; `CHANGELOG.md` `[Unreleased]` hardening entry; this session log;
+  README refreshed with current suite numbers and version scheme.
+
+---
+
 ## Session 2026-08-09 — Milestone v1.3: Monetization + Account Security
 
 **Branch:** `feature/v1.1-production-platform` (continued)
