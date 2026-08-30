@@ -49,32 +49,26 @@ async function apiFetch(path: string, options: RequestInit = {}) {
 export const api = {
   // Chat
   async chat(req: ChatRequest): Promise<ChatResponse> {
-    // Get custom settings from localStorage
-    const customApiKey = localStorage.getItem('sage_custom_api_key');
-    const customModel = localStorage.getItem('sage_custom_model');
-    // User-selected provider credential (Settings → Models & API Providers)
+    // User-selected provider credential (Settings → Models & API Providers).
+    // Provider keys are stored server-side (AES-256-GCM encrypted); the client
+    // only persists the non-secret credential id. Legacy localStorage API keys
+    // were removed (audit P1-6).
     const providerId = localStorage.getItem('sage_active_provider_id');
-    
+
     const requestBody = {
       ...req,
       providerId: providerId || undefined,
-      customApiKey: customApiKey || undefined,
-      customModel: customModel || undefined,
     };
-    
+
     return apiFetch('/api/chat', { method: 'POST', body: JSON.stringify(requestBody) });
   },
 
   async chatWithProvider(req: ChatRequest & { providerId?: string }): Promise<ChatResponse> {
-    const customApiKey = localStorage.getItem('sage_custom_api_key');
-    const customModel = localStorage.getItem('sage_custom_model');
     return apiFetch('/api/chat', {
       method: 'POST',
       body: JSON.stringify({
         ...req,
         providerId: req.providerId || undefined,
-        customApiKey: customApiKey || undefined,
-        customModel: customModel || undefined,
       }),
     });
   },
@@ -100,6 +94,12 @@ export const api = {
 
   async demo() {
     return apiFetch('/api/auth/demo', { method: 'POST' });
+  },
+
+  // Resolve the current bearer token to a fresh user object (server truth,
+  // used to re-validate sessions and admin status after a page reload).
+  async getMe() {
+    return apiFetch('/api/auth/me');
   },
 
   // Password reset
