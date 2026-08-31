@@ -89,10 +89,14 @@ export function jwtOrApiKey(req: AuthRequest & ApiKeyRequest, _res: Response, ne
             method: req.method,
             statusCode: 200,
           });
+          next();
+        } else if (auth && auth.quotaExceeded) {
+          _res.status(429).json({ error: 'Daily quota exceeded for this API key' });
+        } else {
+          _res.status(401).json({ error: 'Invalid, revoked, or expired API key' });
         }
-        next();
       })
-      .catch(() => next());
+      .catch(() => _res.status(401).json({ error: 'Invalid API key' }));
     return;
   }
 

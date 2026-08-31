@@ -44,7 +44,7 @@ export interface Conversation {
 
 interface AppState {
   // Auth
-  user: { id: string; email: string; name: string } | null;
+  user: { id: string; email: string; name: string; isAdmin?: boolean } | null;
   token: string | null;
   setUser: (user: any, token: string) => void;
   logout: () => void;
@@ -86,14 +86,6 @@ interface AppState {
   // Attachments
   uploadedImage: { base64: string; type: string; name: string } | null;
   setUploadedImage: (img: { base64: string; type: string; name: string } | null) => void;
-
-  // Settings
-  ttsEnabled: boolean;
-  toggleTts: () => void;
-  apiKey: string;
-  setApiKey: (key: string) => void;
-  customModel: string;
-  setCustomModel: (model: string) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -157,12 +149,4 @@ export const useAppStore = create<AppState>((set) => ({
   // Attachments
   uploadedImage: null,
   setUploadedImage: (img) => set({ uploadedImage: img }),
-
-  // Settings
-  ttsEnabled: false,
-  toggleTts: () => set((s) => ({ ttsEnabled: !s.ttsEnabled })),
-  apiKey: '',
-  setApiKey: (key) => set({ apiKey: key }),
-  customModel: 'llama-3.3-70b-versatile',
-  setCustomModel: (model) => set({ customModel: model }),
 }));

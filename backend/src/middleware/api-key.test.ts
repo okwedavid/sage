@@ -6,7 +6,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import jwt from 'jsonwebtoken';
 import { requireApiKey, jwtOrApiKey } from './api-key';
-import { createKey } from '../services/api-keys';
+import { createKey, authenticateKey } from '../services/api-keys';
 import { Settings } from '../config/settings';
 
 function mockRes() {
@@ -152,5 +152,43 @@ describe('jwtOrApiKey', () => {
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(req.userId).toBeUndefined();
+  });
+
+  it('rejects an invalid API key with 401', async () => {
+    const req: any = {
+      headers: { authorization: `Bearer sk_sage_${'A'.repeat(43)}` },
+      originalUrl: '/api/chat',
+      method: 'POST',
+    };
+    const res = mockRes();
+    const next = vi.fn();
+
+    jwtOrApiKey(req, res, next);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(401);
+    expect(res.body.error).toContain('Invalid');
+  });
+
+  it('rejects an API key whose daily quota is exhausted with 429', async () => {
+    const { plaintext } = (await createKey({ userId: 'u9', quotaPerDay: 1 }))!;
+    await authenticateKey(plaintext); // request #1
+    await authenticateKey(plaintext); // request #2 > quotaPerDay
+
+    const req: any = {
+      headers: { authorization: `Bearer ${plaintext}` },
+      originalUrl: '/api/chat',
+      method: 'POST',
+    };
+    const res = mockRes();
+    const next = vi.fn();
+
+    jwtOrApiKey(req, res, next);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(429);
+    expect(res.body.error).toContain('quota');
   });
 });

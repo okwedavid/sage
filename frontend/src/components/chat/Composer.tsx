@@ -7,7 +7,7 @@ import { useState, useRef, KeyboardEvent } from 'react';
 import { useAppStore, Message } from '@/stores/appStore';
 import { api } from '@/lib/api';
 import { generateId, formatTime } from '@/lib/utils';
-import { Send, Paperclip, Mic, Globe, Image as ImageIcon, X } from 'lucide-react';
+import { Send, Paperclip, Image as ImageIcon, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function Composer() {
@@ -219,18 +219,6 @@ export function Composer() {
             title="Attach image"
           >
             <Paperclip className="w-3.5 h-3.5 md:w-4 md:h-4" />
-          </button>
-          <button
-            className="p-1.5 md:p-2 rounded-lg text-txt-muted hover:text-txt-primary hover:bg-sage-hover transition-all"
-            title="Voice input"
-          >
-            <Mic className="w-3.5 h-3.5 md:w-4 md:h-4" />
-          </button>
-          <button
-            className="p-1.5 md:p-2 rounded-lg text-txt-muted hover:text-txt-primary hover:bg-sage-hover transition-all"
-            title="Paste URL"
-          >
-            <Globe className="w-3.5 h-3.5 md:w-4 md:h-4" />
           </button>
 
           {/* Attach panel */}

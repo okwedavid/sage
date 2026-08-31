@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- CORS: removed the `*.vercel.app` wildcard — only the exact configured deployment plus local dev origins are allowed; enforced in production for both simple and preflight (OPTIONS) requests, with tests.
+- `jwtOrApiKey` middleware now rejects invalid/revoked API keys with **401** and exhausted per-day quotas with **429** instead of silently proceeding unauthenticated.
+
+### Fixed
+- Admin page hidden from non-admin users: `isAdmin` now served by `/api/auth/login|register|demo|me`, sidebar nav filtered, and an `AdminDenied` guard added to the admin view.
+- Billing page no longer crashes on a null plan; graceful fallback messaging instead.
+- Conversation history after browser refresh: the sidebar now fetches the full conversation via `GET /api/conversations/:id` on open instead of trusting the possibly-stale cached list.
+- Product version surfaced consistently as `SAGE v1.0.0` (Settings) / `SAGE v1.0` (Inspector) via `PRODUCT_VERSION`, keeping the engine version (7.1) internal.
+- Removed dead UI affordances: Microphone (voice input) and Paste-URL buttons from the Composer; the TTS toggle and decorative Image Gen / Voice Input / Text-to-Speech tools from Settings/Inspector (no implementation existed).
+- Removed the legacy custom API key / model localStorage flow (`sage_custom_api_key`, `sage_custom_model`); leftover values are scrubbed on Settings mount. API-key management stays server-side.
+- App wrapped in an error boundary so a component crash no longer white-screens the whole app.
+
+### Verified
+- Backend: **555 tests / 55 files** passing (`npx vitest run`); coverage **lines 93.12% / branches 80.06% / functions 94.86% / statements 93.12%** (thresholds enforced).
+- Frontend: `tsc --noEmit` clean, `next lint` clean (0 warnings), production `next build` succeeds.
+
+### Planned
+- AgentFinance worker implementation (finance data provider + premium gate).
+
 ## [1.3.0] - 2026-08-09
 
 ### Added
@@ -83,11 +105,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - Chat history is untrusted input: capped (40 turns, 4000 chars/turn) and role-whitelisted before entering the prompt.
 - Plan quotas enforced server-side (chat + API keys + organizations); demo mode applies the Free tier.
-
-## [Unreleased]
-
-### Planned
-- AgentFinance worker implementation (finance data provider + premium gate).
 
 ## [1.0.0-beta] - 2026-08-05
 

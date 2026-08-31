@@ -1,4 +1,4 @@
-# SAGE v7.0 — Systemic Agentic General Engine
+# SAGE v1.0.0 — Systemic Agentic General Engine
 
 > **AI Cognitive Operating System** — Not a chatbot, not a wrapper.
 >
@@ -111,17 +111,17 @@ npm run dev:frontend  # http://localhost:3000
 
 ## 🧪 Testing
 
-The backend ships with a **479-test suite** (49 files) covering the intent
+The backend ships with a **555-test suite** (55 files) covering the intent
 pipeline (including greeting/CHAT classification), the provider system
 (credential encryption, adapters, model discovery, isolation), conversation
 memory, image analysis, and all routes/middleware/services — plus dedicated
 security, concurrency, performance, and regression suites. Coverage thresholds
 (≥90% lines/statements/functions, ≥80% branches) are enforced by CI-ready
-vitest config.
+vitest config (currently 93.12% lines / 80.06% branches).
 
 ```bash
 cd backend
-npm test                 # run all tests
+npx vitest run           # run all tests (one-shot; `npm test` runs watch mode)
 npm run test:coverage    # coverage report + threshold gate
 ```
 

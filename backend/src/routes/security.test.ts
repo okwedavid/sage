@@ -82,13 +82,20 @@ describe('CORS in production', () => {
     });
   });
 
-  it('allows configured origins and any *.vercel.app origin', async () => {
+  it('allows configured origins and rejects arbitrary vercel.app origins', async () => {
     const prodApp = await bootProdApp();
     await withServer(prodApp, async (baseUrl) => {
+      // The exact configured deployment is allow-listed…
       const vercel = await fetch(`${baseUrl}/api/agents`, {
-        headers: { Origin: 'https://sage-anything.vercel.app' },
+        headers: { Origin: 'https://sage-delta-three.vercel.app' },
       });
       expect(vercel.status).toBe(200);
+
+      // …but ANY other *.vercel.app deployment is blocked (no wildcard).
+      const injected = await fetch(`${baseUrl}/api/agents`, {
+        headers: { Origin: 'https://sage-anything.vercel.app' },
+      });
+      expect(injected.status).toBe(403);
 
       const localhost = await fetch(`${baseUrl}/api/agents`, {
         headers: { Origin: 'http://localhost:3000' },
@@ -97,6 +104,41 @@ describe('CORS in production', () => {
 
       const noOrigin = await fetch(`${baseUrl}/api/agents`);
       expect(noOrigin.status).toBe(200); // curl / mobile clients
+    });
+  });
+
+  it('serves preflight for allow-listed origins', async () => {
+    const prodApp = await bootProdApp();
+    await withServer(prodApp, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/api/agents`, {
+        method: 'OPTIONS',
+        headers: { Origin: 'http://localhost:3000', 'Access-Control-Request-Method': 'POST' },
+      });
+      expect(res.status).toBe(204);
+    });
+  });
+
+  it('rejects preflight from origins not in the allow-list with 403', async () => {
+    const prodApp = await bootProdApp();
+    await withServer(prodApp, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/api/agents`, {
+        method: 'OPTIONS',
+        headers: { Origin: 'https://evil.example.com', 'Access-Control-Request-Method': 'POST' },
+      });
+      expect(res.status).toBe(403);
+      const body: any = await res.json();
+      expect(body.error).toContain('CORS');
+    });
+  });
+
+  it('rejects preflight from a wildcard vercel.app origin with 403', async () => {
+    const prodApp = await bootProdApp();
+    await withServer(prodApp, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/api/agents`, {
+        method: 'OPTIONS',
+        headers: { Origin: 'https://any-deployment.vercel.app', 'Access-Control-Request-Method': 'POST' },
+      });
+      expect(res.status).toBe(403);
     });
   });
 });

@@ -159,7 +159,7 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
         return;
       }
       await recordAudit({ actorType: 'user', actorId: user.id, action: 'auth.register', resource: email, ip: clientIp(req), userAgent: req.headers['user-agent'] as string });
-      res.status(201).json({ token: signToken(user), user: { id: user.id, email, name: user.name } });
+      res.status(201).json({ token: signToken(user), user: { id: user.id, email, name: user.name, isAdmin: Boolean(user.is_admin) } });
       return;
     }
 
@@ -169,7 +169,7 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
       return;
     }
     users.set(email, { id: userId, email, password: passwordHash, name: displayName });
-    res.status(201).json({ token: signToken({ id: userId, email, name: displayName }), user: { id: userId, email, name: displayName } });
+    res.status(201).json({ token: signToken({ id: userId, email, name: displayName }), user: { id: userId, email, name: displayName, isAdmin: false } });
   } catch (error: any) {
     console.error('Register error:', error);
     res.status(500).json({ error: 'Registration failed' });
@@ -420,7 +420,7 @@ router.post('/demo', (req: Request, res: Response) => {
 
   res.json({
     token,
-    user: { id: userId, email, name: 'SAGE Explorer' },
+    user: { id: userId, email, name: 'SAGE Explorer', isAdmin: false },
   });
 });
 

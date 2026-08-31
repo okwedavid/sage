@@ -83,6 +83,7 @@ export const Settings = {
 
   // App Meta
   APP_NAME: 'SAGE',
+  PRODUCT_VERSION: '1.0.0',
   APP_VERSION: '7.1',
   APP_TAGLINE: 'Systemic Agentic General Engine',
 

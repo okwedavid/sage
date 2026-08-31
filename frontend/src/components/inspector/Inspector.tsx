@@ -8,9 +8,6 @@ import { TASK_COLORS, PRIORITY_COLORS } from '@/lib/utils';
 import {
   Globe,
   Eye,
-  Palette,
-  Mic,
-  Volume2,
   BarChart3,
   CheckCircle2,
   TrendingUp,
@@ -18,11 +15,8 @@ import {
 } from 'lucide-react';
 
 const TOOLS = [
-  { icon: <Globe className="w-4 h-4" />, name: 'Web Search', desc: 'Search the internet', color: '#58a6ff' },
+  { icon: <Globe className="w-4 h-4" />, name: 'Web Fetch', desc: 'Fetch & analyze URLs', color: '#58a6ff' },
   { icon: <Eye className="w-4 h-4" />, name: 'Image Analysis', desc: 'Analyze images', color: '#a78bfa' },
-  { icon: <Palette className="w-4 h-4" />, name: 'Image Gen', desc: 'Generate images', color: '#f093fb' },
-  { icon: <Mic className="w-4 h-4" />, name: 'Voice Input', desc: 'Speak your query', color: '#3fb950' },
-  { icon: <Volume2 className="w-4 h-4" />, name: 'Text to Speech', desc: 'Listen to responses', color: '#f0883e' },
 ];
 
 export function Inspector() {
@@ -111,7 +105,7 @@ export function Inspector() {
           <div className="w-7 h-7 rounded-lg bg-gradient-primary flex items-center justify-center">
             <span className="text-xs">🧠</span>
           </div>
-          <span className="font-display font-bold text-txt-primary text-sm">SAGE v7.0</span>
+          <span className="font-display font-bold text-txt-primary text-sm">SAGE v1.0</span>
         </div>
         <div className="text-[10px] text-txt-secondary leading-relaxed">
           Systemic Agentic

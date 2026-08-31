@@ -44,16 +44,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// CORS - Allow multiple origins in production
+// CORS - Allow specific origins only
 const allowedOrigins = [
   Settings.FRONTEND_URL,
   'http://localhost:3000',
   'http://localhost:3001',
   'https://sage-delta-three.vercel.app',
 ].filter(Boolean);
-
-// Allow any Vercel deployment (*.vercel.app)
-const isVercelOrigin = (origin: string) => origin.endsWith('.vercel.app');
 
 app.use(
   cors({
@@ -63,8 +60,8 @@ app.use(
       // Allow requests with no origin (mobile apps, curl, etc.)
       if (!origin) return callback(null, true);
       
-      // Check if origin is in allowed list OR is a Vercel deployment
-      if (allowedOrigins.includes(origin) || isVercelOrigin(origin)) {
+      // Check if origin is in allowed list
+      if (allowedOrigins.includes(origin)) {
         console.log(`[CORS] ✅ Allowed: ${origin}`);
         return callback(null, true);
       }
@@ -90,14 +87,15 @@ app.use(
 // ── Explicitly set CORS headers to override Railway proxy ──
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (origin && (allowedOrigins.includes(origin) || isVercelOrigin(origin))) {
+  if (origin && allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   }
   
-  // Handle preflight requests
+  // Non-browser probes (no Origin); real browser preflights are answered by
+  // the cors middleware above (204 for allow-listed origins, 403 otherwise).
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -140,7 +138,8 @@ app.get('/api/metrics', (_req, res) => {
 app.get('/', (_req, res) => {
   res.json({
     name: Settings.APP_NAME,
-    version: Settings.APP_VERSION,
+    version: Settings.PRODUCT_VERSION,
+    engine: Settings.APP_VERSION,
     tagline: Settings.APP_TAGLINE,
     status: 'operational',
     endpoints: {

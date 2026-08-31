@@ -32,7 +32,7 @@ const NAV_ITEMS = [
   { id: 'tools', label: 'Tools', icon: Wrench },
   { id: 'organizations', label: 'Organizations', icon: Building2 },
   { id: 'billing', label: 'Billing', icon: CreditCard },
-  { id: 'admin', label: 'Admin', icon: ShieldCheck },
+  { id: 'admin', label: 'Admin', icon: ShieldCheck, adminOnly: true },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
@@ -78,10 +78,21 @@ export function Sidebar() {
     }
   };
 
-  const handleOpenSession = (id: string) => {
+  const handleOpenSession = async (id: string) => {
     const conv = conversations.find((c) => c.id === id);
     if (conv) {
-      loadConversation(conv);
+      // Fetch full conversation with messages to ensure we have the latest state
+      try {
+        const full = await api.getConversation(id);
+        if (full) {
+          loadConversation(full);
+        } else {
+          loadConversation(conv);
+        }
+      } catch {
+        // Fallback to cached version if fetch fails
+        loadConversation(conv);
+      }
       setPage('conversations');
       if (window.innerWidth < 1024) toggleSidebar();
     }
@@ -183,7 +194,7 @@ export function Sidebar() {
           <div className="text-[10px] font-bold tracking-[0.12em] text-txt-muted uppercase px-3.5 mb-2">
             Navigation
           </div>
-          {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+          {NAV_ITEMS.filter(({ adminOnly }) => !adminOnly || user?.isAdmin).map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => handleNavClick(id)}
@@ -217,7 +228,7 @@ export function Sidebar() {
               </div>
               <div className="flex justify-between">
                 <span className="text-txt-secondary">Version</span>
-                <span className="font-mono text-txt-primary">SAGE v7.1</span>
+                <span className="font-mono text-txt-primary">v1.0.0</span>
               </div>
             </div>
           </div>
