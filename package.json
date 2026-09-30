@@ -3,6 +3,9 @@
   "version": "7.0.0",
   "private": true,
   "description": "SAGE — Systemic Agentic General Engine | Full-Stack AI Platform",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "cd backend && npm run dev",
